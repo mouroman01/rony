@@ -109,6 +109,7 @@ from vision_module import (
 from google_services import gmail_resumer, calendar_resumer, drive_rechercher
 from wake_word import contient_wake_word, contient_mot_arret, nettoyer_commande
 from jarvis_actions import executar_intencao_rapida
+from vision_actions import executar_acao_visao
 from camera_module import (
     ver_camera, capturar_e_salvar, aprender_rosto,
     resposta_o_que_voce_ve, resposta_tem_alguem, resposta_o_que_e_isso,
@@ -777,6 +778,16 @@ async def traiter_commande_systeme(texte: str) -> bool:
     resposta_rapida = executar_intencao_rapida(texte)
     if resposta_rapida:
         await parler(resposta_rapida)
+        return True
+
+    resposta_visao = await executar_acao_visao(
+        texte,
+        client_gemini=_client_gemini,
+        lingua=langue,
+        nome_usuario=_nome_usuario() or "usuario",
+    )
+    if resposta_visao:
+        await parler(resposta_visao)
         return True
 
     # ── Arrêt / sortie ────────────────────────────────────────
