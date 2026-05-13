@@ -16,7 +16,7 @@ from file_manager import (
     pesquisar_arquivos,
     resoudre_chemin,
 )
-from internet_search import pesquisar_e_resumir
+from internet_search import pesquisar_e_resumir, pesquisar_viabilidade
 from rony_paths import DATA_DIR
 from vision_module import capturer_et_sauvegarder
 
@@ -106,6 +106,43 @@ def _extrair_consulta_web(texto: str) -> str:
             consulta = re.sub(r"\s+(?:e\s+)?(?:me\s+)?(?:resume|resuma|resumir|explique|explica)$", "", consulta).strip()
             return consulta
     return ""
+
+
+def _extrair_consulta_viabilidade(texto: str) -> str:
+    t = _strip_wake_word(texto)
+    padroes = [
+        r"(?:faz|faca|faça|realiza|monte|verifica|verifique)\s+(?:uma\s+)?(?:busca|pesquisa|analise|análise)\s+(?:de\s+)?(?:viabilidade\s+)?(?:completa\s+)?(?:sobre\s+|para\s+|de\s+)?(.+)",
+        r"(?:vale a pena|compensa)\s+(.+)",
+        r"(?:onde comprar|onde encontro|procura lojas?|buscar lojas?|pesquisa lojas?)\s+(?:de\s+|para\s+)?(.+)",
+        r"(?:procura|pesquisa|busca|buscar)\s+(?:localidade|locais|lugares|perto|perto de mim|na minha regiao|na minha região)\s+(?:de\s+|para\s+|sobre\s+)?(.+)",
+        r"(?:compara|compare|analisa|analise|avalia|avalie)\s+(?:opcoes|opções|precos|preços|lojas|localidades)?\s*(?:de\s+|para\s+|sobre\s+)?(.+)",
+    ]
+    for padrao in padroes:
+        m = re.search(padrao, t)
+        if m:
+            consulta = m.group(1).strip(" .,!?'\"")
+            consulta = re.sub(r"\s+(?:e\s+)?(?:me\s+)?(?:resume|resuma|resumir)$", "", consulta).strip()
+            return consulta
+    return ""
+
+
+def _pesquisa_viabilidade(texto: str) -> Optional[str]:
+    t = _strip_wake_word(texto)
+    gatilhos = (
+        "viabilidade", "vale a pena", "compensa", "onde comprar", "onde encontro",
+        "loja", "lojas", "preco", "preço", "mais barato", "oferta",
+        "localidade", "locais", "lugares", "perto de mim", "na minha regiao",
+        "na minha região", "comparar", "compare", "custo beneficio", "custo benefício",
+    )
+    if not any(g in t for g in gatilhos):
+        return None
+    consulta = _extrair_consulta_viabilidade(t) or _extrair_consulta_web(t)
+    if not consulta or len(consulta) < 3:
+        return "O que voce quer que eu avalie em uma busca completa?"
+    try:
+        return pesquisar_viabilidade(consulta)
+    except Exception as exc:
+        return f"Nao consegui completar a pesquisa de viabilidade: {exc}"
 
 
 def _buscar_na_internet(texto: str) -> Optional[str]:
@@ -345,6 +382,7 @@ def executar_intencao_rapida(texto: str) -> Optional[str]:
         _confirmacao_pendente,
         _acao_perigosa,
         _memoria_preferencias,
+        _pesquisa_viabilidade,
         _buscar_na_internet,
         _controlar_volume,
         _captura_tela,

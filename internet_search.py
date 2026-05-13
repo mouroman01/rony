@@ -168,9 +168,16 @@ def buscar_web(consulta: str, limite: int = 5) -> list[dict[str, str]]:
     return _buscar_duckduckgo(consulta, limite=limite)
 
 
-def _buscar_google_serpapi(consulta: str, limite: int = 5) -> list[dict[str, str]]:
+def _serpapi_key() -> str:
     api_key = os.getenv("SERPAPI_API_KEY", "").strip()
     if not api_key or "VOTRE_CLE" in api_key:
+        return ""
+    return api_key
+
+
+def _buscar_google_serpapi(consulta: str, limite: int = 5) -> list[dict[str, str]]:
+    api_key = _serpapi_key()
+    if not api_key:
         return []
     url = "https://serpapi.com/search.json"
     params = {
@@ -191,6 +198,89 @@ def _buscar_google_serpapi(consulta: str, limite: int = 5) -> list[dict[str, str
         snippet = _limpar_texto(item.get("snippet", ""))
         if title and link:
             resultados.append({"title": title, "url": link, "snippet": snippet, "provider": "Google"})
+        if len(resultados) >= limite:
+            break
+    return resultados
+
+
+def buscar_lojas_serpapi(consulta: str, limite: int = 6) -> list[dict[str, str]]:
+    api_key = _serpapi_key()
+    if not api_key:
+        return []
+    params = {
+        "engine": "google_shopping",
+        "q": consulta,
+        "api_key": api_key,
+        "hl": "pt",
+        "gl": "br",
+        "num": limite,
+    }
+    resp = requests.get("https://serpapi.com/search.json", params=params, headers={"User-Agent": USER_AGENT}, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+    resultados = []
+    for item in data.get("shopping_results", []):
+        title = _limpar_texto(item.get("title", ""))
+        price = _limpar_texto(item.get("price", ""))
+        source = _limpar_texto(item.get("source", ""))
+        link = _limpar_texto(item.get("link") or item.get("product_link") or "")
+        rating = item.get("rating")
+        reviews = item.get("reviews")
+        snippet_parts = [p for p in [price, source, f"nota {rating}" if rating else "", f"{reviews} avaliacoes" if reviews else ""] if p]
+        if title:
+            resultados.append({
+                "title": title,
+                "url": link,
+                "snippet": " | ".join(snippet_parts),
+                "provider": "Google Shopping",
+                "price": price,
+                "source": source,
+            })
+        if len(resultados) >= limite:
+            break
+    return resultados
+
+
+def buscar_lugares_serpapi(consulta: str, localidade: str = "", limite: int = 6) -> list[dict[str, str]]:
+    api_key = _serpapi_key()
+    if not api_key:
+        return []
+    q = f"{consulta} {localidade}".strip()
+    params = {
+        "engine": "google_maps",
+        "q": q,
+        "api_key": api_key,
+        "hl": "pt",
+        "gl": "br",
+        "type": "search",
+    }
+    resp = requests.get("https://serpapi.com/search.json", params=params, headers={"User-Agent": USER_AGENT}, timeout=15)
+    resp.raise_for_status()
+    data = resp.json()
+    resultados = []
+    for item in data.get("local_results", []):
+        title = _limpar_texto(item.get("title", ""))
+        address = _limpar_texto(item.get("address", ""))
+        phone = _limpar_texto(item.get("phone", ""))
+        rating = item.get("rating")
+        reviews = item.get("reviews")
+        website = _limpar_texto(item.get("website", ""))
+        gps = item.get("gps_coordinates") or {}
+        maps_url = ""
+        if gps.get("latitude") and gps.get("longitude"):
+            maps_url = f"https://www.google.com/maps/search/?api=1&query={gps['latitude']},{gps['longitude']}"
+        snippet_parts = [p for p in [address, phone, f"nota {rating}" if rating else "", f"{reviews} avaliacoes" if reviews else ""] if p]
+        if title:
+            resultados.append({
+                "title": title,
+                "url": website or maps_url,
+                "snippet": " | ".join(snippet_parts),
+                "provider": "Google Maps",
+                "address": address,
+                "phone": phone,
+                "rating": rating,
+                "reviews": reviews,
+            })
         if len(resultados) >= limite:
             break
     return resultados
@@ -330,3 +420,97 @@ def pesquisar_e_resumir(consulta: str, limite: int = 5, ler_sites: int = 3) -> s
     resumo = resumo[:900].rstrip()
     fontes_txt = "; ".join(fontes[:3])
     return f"Busca via {provedor}. Encontrei isto sobre {consulta}: {resumo}. Fontes: {fontes_txt}."
+
+
+def _extrair_precos(resultados: list[dict[str, str]]) -> list[str]:
+    precos = []
+    for item in resultados:
+        preco = item.get("price") or ""
+        if preco:
+            precos.append(preco)
+    return precos
+
+
+def _formatar_itens(titulo: str, resultados: list[dict[str, str]], limite: int = 4) -> str:
+    if not resultados:
+        return f"{titulo}: nao encontrei dados suficientes."
+    partes = []
+    for item in resultados[:limite]:
+        trecho = item["title"]
+        if item.get("snippet"):
+            trecho += f" ({item['snippet']})"
+        partes.append(trecho)
+    return f"{titulo}: " + "; ".join(partes) + "."
+
+
+def pesquisar_viabilidade(consulta: str, localidade: str = "", limite: int = 6) -> str:
+    consulta = consulta.strip()
+    if not consulta:
+        return "O que voce quer que eu avalie?"
+
+    consulta_l = consulta.lower()
+    quer_lojas = any(p in consulta_l for p in (
+        "comprar", "loja", "lojas", "preco", "preço", "produto", "barato",
+        "mais barato", "oferta", "mercado", "shopping", "onde encontro",
+    ))
+    quer_local = any(p in consulta_l for p in (
+        "perto", "perto de", "local", "localidade", "endereco", "endereço",
+        "bairro", "cidade", "maps", "rota", "distancia", "distância",
+        "restaurante", "hotel", "clinica", "clínica", "mercado", "assistencia",
+    ))
+    quer_viabilidade = any(p in consulta_l for p in (
+        "viabilidade", "vale a pena", "compensa", "melhor opção", "melhor opcao",
+        "analisa", "analise", "avaliar", "avalia", "comparar", "compare",
+        "custo beneficio", "custo benefício",
+    ))
+
+    web = buscar_web(consulta, limite=limite)
+    lojas = buscar_lojas_serpapi(consulta, limite=limite) if quer_lojas or quer_viabilidade else []
+    lugares = buscar_lugares_serpapi(consulta, localidade=localidade, limite=limite) if quer_local or localidade else []
+
+    if not web and not lojas and not lugares:
+        return f"Nao encontrei dados suficientes para avaliar {consulta}."
+
+    provedor = "Google/SerpAPI" if _serpapi_key() else (web[0].get("provider", "web") if web else "web")
+    blocos = [f"Pesquisa de viabilidade via {provedor} para: {consulta}."]
+    blocos.append(_formatar_itens("Resumo web", web, limite=3))
+    if lojas:
+        blocos.append(_formatar_itens("Lojas e precos", lojas, limite=4))
+        precos = _extrair_precos(lojas)
+        if precos:
+            blocos.append(f"Faixa de precos encontrada: {', '.join(precos[:4])}.")
+    if lugares:
+        blocos.append(_formatar_itens("Opcoes locais", lugares, limite=4))
+
+    sinais_positivos = []
+    sinais_alerta = []
+    texto_base = " ".join([i.get("title", "") + " " + i.get("snippet", "") for i in web + lojas + lugares]).lower()
+    if any(p in texto_base for p in ("avalia", "nota", "reviews", "reclame aqui", "garantia")):
+        sinais_positivos.append("ha sinais de reputacao/avaliacoes para comparar")
+    if any(p in texto_base for p in ("indisponivel", "fora de estoque", "esgotado", "reclama", "problema")):
+        sinais_alerta.append("apareceram possiveis alertas de disponibilidade ou reputacao")
+    if lojas:
+        sinais_positivos.append("ha opcoes de compra encontradas")
+    if lugares:
+        sinais_positivos.append("ha opcoes locais encontradas")
+
+    conclusao = "Conclusao: "
+    if lojas or lugares or len(web) >= 3:
+        conclusao += "parece viavel continuar, mas eu recomendo comparar preco final, reputacao, prazo e garantia antes de decidir."
+    else:
+        conclusao += "a viabilidade ainda esta incerta; encontrei poucos dados e vale ampliar a busca."
+    if sinais_positivos:
+        conclusao += " Pontos a favor: " + "; ".join(sinais_positivos[:3]) + "."
+    if sinais_alerta:
+        conclusao += " Atenção: " + "; ".join(sinais_alerta[:2]) + "."
+    blocos.append(conclusao)
+
+    fontes = []
+    for item in (web + lojas + lugares):
+        if item.get("url"):
+            fontes.append(f"{item['title']} - {item['url']}")
+    if fontes:
+        blocos.append("Fontes: " + "; ".join(fontes[:5]) + ".")
+
+    resposta = " ".join(blocos)
+    return resposta[:1800]
