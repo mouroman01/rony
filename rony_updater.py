@@ -1,0 +1,219 @@
+# ============================================================
+#  rony_updater.py — Auto-update via GitHub Releases
+#
+#  Fluxo:
+#    1. Lê update_manifest.json do repositório GitHub
+#    2. Compara versão remota com versão local
+#    3. Se nova versão: notifica via toast + diálogo PyWebView
+#    4. Se aceito: baixa instalador em AppData/updates/
+#    5. Executa instalador silencioso e encerra o Rony
+#
+#  update_manifest.json (hosted no GitHub raw):
+#    {
+#      "latest_version": "1.0.1",
+#      "download_url": "https://github.com/.../Rony_Setup_1.0.1.exe",
+#      "notes": "O que mudou nesta versão.",
+#      "mandatory": false
+#    }
+# ============================================================
+
+import json
+import os
+import threading
+import time
+import urllib.request
+import urllib.error
+import subprocess
+from pathlib import Path
+
+from rony_paths import UPDATES_DIR
+
+# ── URL do manifesto (raw GitHub) ─────────────────────────────
+MANIFEST_URL = (
+    "https://raw.githubusercontent.com/mouroman01/rony/main/update_manifest.json"
+)
+TIMEOUT_HTTP = 12  # segundos
+
+
+# ═══════════════════════════════════════════════════════════════
+#  UTILITÁRIOS DE VERSÃO
+# ═══════════════════════════════════════════════════════════════
+
+def _version_tuple(v: str) -> tuple:
+    try:
+        return tuple(int(x) for x in str(v).strip().split("."))
+    except Exception:
+        return (0,)
+
+
+def _e_mais_novo(remoto: str, atual: str) -> bool:
+    return _version_tuple(remoto) > _version_tuple(atual)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  LEITURA DO MANIFESTO
+# ═══════════════════════════════════════════════════════════════
+
+def _ler_manifesto() -> dict | None:
+    try:
+        req = urllib.request.Request(
+            MANIFEST_URL,
+            headers={"User-Agent": "Rony-Updater/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=TIMEOUT_HTTP) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.URLError as e:
+        print(f"[UPDATE] Sem conexao ou URL invalida: {e.reason}")
+        return None
+    except Exception as e:
+        print(f"[UPDATE] Falha ao ler manifesto: {e}")
+        return None
+
+
+# ═══════════════════════════════════════════════════════════════
+#  DOWNLOAD DO INSTALADOR
+# ═══════════════════════════════════════════════════════════════
+
+def _baixar_installer(versao: str, url: str) -> Path | None:
+    destino = UPDATES_DIR / f"Rony_Setup_{versao}.exe"
+    if destino.exists() and destino.stat().st_size > 100_000:
+        print(f"[UPDATE] Instalador ja baixado: {destino.name}")
+        return destino
+    try:
+        print(f"[UPDATE] Baixando Rony v{versao}...")
+
+        def _progresso(bloco, tam_bloco, tam_total):
+            if tam_total > 0:
+                pct = min(100, bloco * tam_bloco * 100 // tam_total)
+                print(f"[UPDATE] Download: {pct}%", end="\r")
+
+        urllib.request.urlretrieve(url, destino, reporthook=_progresso)
+        print(f"\n[UPDATE] Download concluido: {destino.name}")
+        return destino
+    except Exception as e:
+        print(f"[UPDATE] Falha no download: {e}")
+        if destino.exists():
+            destino.unlink()
+        return None
+
+
+# ═══════════════════════════════════════════════════════════════
+#  INSTALAÇÃO SILENCIOSA
+# ═══════════════════════════════════════════════════════════════
+
+def _instalar(installer: Path) -> None:
+    """Executa o instalador Inno Setup em modo silencioso e encerra o Rony."""
+    print(f"[UPDATE] Instalando {installer.name} ...")
+    try:
+        subprocess.Popen(
+            [str(installer), "/VERYSILENT", "/NORESTART"],
+            shell=False,
+            close_fds=True,
+        )
+    except Exception as e:
+        print(f"[UPDATE] Falha ao executar instalador: {e}")
+        return
+    time.sleep(1)
+    print("[UPDATE] Encerrando Rony para concluir instalacao...")
+    os._exit(0)
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ENTRADA PRINCIPAL
+# ═══════════════════════════════════════════════════════════════
+
+def verificar_atualizacao(
+    versao_atual: str,
+    janela_pywebview=None,
+    notif_fn=None,
+    ws_broadcast_fn=None,
+) -> None:
+    """
+    Verifica atualizações em thread background. Não bloqueia.
+
+    Args:
+        versao_atual:     versão atual do Rony (ex: "1.0.0")
+        janela_pywebview: objeto window do pywebview (confirm() nativo)
+        notif_fn:         função notificacao(titulo, msg, duration) do executor_module
+        ws_broadcast_fn:  coroutine ou callable para broadcast WebSocket ao frontend
+    """
+
+    def _tarefa():
+        # Aguarda 8s após o boot para não atrasar o startup
+        time.sleep(8)
+
+        manifesto = _ler_manifesto()
+        if not manifesto:
+            return
+
+        versao_nova  = manifesto.get("latest_version", "").strip()
+        url_download = manifesto.get("download_url",   "").strip()
+        notas        = manifesto.get("notes", "").strip()
+        obrigatoria  = bool(manifesto.get("mandatory", False))
+
+        if not versao_nova:
+            return
+
+        if not _e_mais_novo(versao_nova, versao_atual):
+            print(f"[UPDATE] Rony esta atualizado (v{versao_atual}).")
+            return
+
+        print(f"[UPDATE] Nova versao disponivel: v{versao_nova}")
+
+        # ── Toast desktop ─────────────────────────────────────
+        if notif_fn:
+            try:
+                notif_fn(
+                    "Rony — Atualizacao disponivel",
+                    f"v{versao_nova} esta pronta. {notas[:80]}",
+                    5,
+                )
+            except Exception:
+                pass
+
+        # ── Notifica frontend via WebSocket ───────────────────
+        if ws_broadcast_fn:
+            try:
+                import asyncio
+                payload = json.dumps({
+                    "action"  : "update_available",
+                    "versao"  : versao_nova,
+                    "notas"   : notas,
+                    "mandatory": obrigatoria,
+                    "download_url": url_download,
+                })
+                ws_broadcast_fn(payload)
+            except Exception:
+                pass
+
+        # ── Sem URL — só notifica, não baixa ──────────────────
+        if not url_download:
+            print("[UPDATE] Sem URL de download configurada — notificacao enviada.")
+            return
+
+        # ── Diálogo PyWebView ─────────────────────────────────
+        if janela_pywebview and not obrigatoria:
+            try:
+                msg_js = json.dumps(
+                    f"Nova versao do Rony disponivel!\n\n"
+                    f"Versao atual : {versao_atual}\n"
+                    f"Nova versao  : {versao_nova}\n\n"
+                    f"{notas}\n\n"
+                    f"Deseja atualizar agora?"
+                )
+                aceite = janela_pywebview.evaluate_js(f"confirm({msg_js})")
+                if not aceite:
+                    print("[UPDATE] Atualizacao adiada pelo usuario.")
+                    return
+            except Exception as e:
+                print(f"[UPDATE] Dialogo PyWebView falhou: {e} — prosseguindo se obrigatoria.")
+                if not obrigatoria:
+                    return
+
+        # ── Download + instalação ─────────────────────────────
+        installer = _baixar_installer(versao_nova, url_download)
+        if installer:
+            _instalar(installer)
+
+    t = threading.Thread(target=_tarefa, daemon=True, name="rony-updater")
+    t.start()

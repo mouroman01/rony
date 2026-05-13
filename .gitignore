@@ -1,0 +1,48 @@
+# ── Sécurité ─────────────────────────────────────────────────
+.env
+token.json
+credentials.json
+
+# ── Python ────────────────────────────────────────────────────
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+/dist/
+build/
+.eggs/
+
+# ── Dados Rony ────────────────────────────────────────────────
+rony_memoire.json
+rony_historique.json
+captures/
+rostos/
+rony_tts_*.mp3
+executor_log.jsonl
+
+# ── Modelos ML (auto-download) ────────────────────────────────
+*.pt
+*.onnx
+runs/
+
+# ── Node.js / Frontend ────────────────────────────────────────
+frontend/node_modules/
+# frontend/dist/ está incluído no repo — funciona sem Node.js instalado
+
+# ── Build / Release ───────────────────────────────────────────
+release/
+installer_output/
+build_tmp/
+*.spec
+
+# ── IDE ───────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.code-workspace
+
+# ── Système ───────────────────────────────────────────────────
+Thumbs.db
+.DS_Store
+desktop.ini

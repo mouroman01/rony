@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>R.O.N.Y</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>" />
+</head>
+<body>
+
+  <!-- Orbe principal -->
+  <canvas id="orb-canvas"></canvas>
+
+  <!-- Badge connexion -->
+  <div id="connection-badge" class="badge disconnected">
+    <span class="badge-dot"></span>
+    <span id="connection-label">déconnecté</span>
+  </div>
+
+  <!-- Sélecteur de langue -->
+  <div id="lang-badge" class="lang-badge">
+    <span id="lang-flag">🌐</span>
+    <span id="lang-code">FR</span>
+  </div>
+
+  <!-- Texte de statut -->
+  <div id="status-text" class="status-text"></div>
+
+  <!-- Sous-titres -->
+  <div id="subtitle-box" class="subtitle-box">
+    <p id="subtitle-text"></p>
+  </div>
+
+  <!-- Erreur -->
+  <div id="error-text" class="error-text"></div>
+
+  <!-- Contrôles -->
+  <div id="controls">
+    <button id="mute-button"     class="ctrl-btn" title="Mute / Unmute">mute</button>
+    <button id="capture-button"  class="ctrl-btn" title="Screenshot">📷</button>
+    <button id="keyboard-toggle" class="ctrl-btn" title="Keyboard">⌨</button>
+    <button id="help-toggle"     class="ctrl-btn" title="Help">?</button>
+  </div>
+
+  <!-- Clavier virtuel -->
+  <div id="keyboard-hud" class="keyboard-hud hidden">
+    <div class="keyboard-inner">
+      <input id="keyboard-input" type="text" placeholder="Type a message..." autocomplete="off" />
+      <button id="keyboard-send" class="send-btn">▶</button>
+    </div>
+  </div>
+
+  <!-- Panneau d'aide -->
+  <div id="help-overlay" class="help-overlay hidden">
+    <div class="help-inner">
+      <h3>R.O.N.Y — Commands</h3>
+      <div id="help-commands"></div>
+      <button id="help-close" class="ctrl-btn">✕</button>
+    </div>
+  </div>
+
+  <!-- Sélecteur de langue (modal) -->
+  <div id="lang-modal" class="lang-modal hidden">
+    <div class="lang-modal-inner">
+      <h3>Select Language</h3>
+      <div id="lang-list"></div>
+      <button id="lang-close" class="ctrl-btn">✕</button>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

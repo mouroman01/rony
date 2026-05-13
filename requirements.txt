@@ -1,0 +1,65 @@
+# ==========================================
+# R.O.N.Y — Dépendances Python
+# Responsive Omni-lingual Neural sYstem
+# ==========================================
+
+# --- IA & LLM ---
+google-genai>=1.0.0
+google-generativeai>=0.8.0
+groq
+openai
+anthropic>=0.40.0
+
+# --- Google APIs (Gmail, Drive, Calendar, Sheets, Docs) ---
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.1.0
+google-api-python-client>=2.0.0
+
+# --- Web & Réseau ---
+flask
+flask-cors
+requests>=2.28.0
+websockets>=12.0
+aiohttp>=3.9.0
+httpx>=0.25.0
+
+# --- Audio & TTS ---
+SpeechRecognition>=3.10.0
+edge-tts>=6.0.0
+pyttsx3>=2.90
+pygame>=2.5.0
+PyAudio>=0.2.14
+
+# --- Desktop (janela nativa sem navegador) ---
+pywebview>=4.4.0
+
+# --- Vision & Interface ---
+pyautogui>=0.9.50
+Pillow>=10.0.0
+screeninfo>=0.8.0
+opencv-contrib-python>=4.8.0   # inclui LBPH face recognizer (opencv-python pode ser removido)
+pycaw>=20181226
+screen-brightness-control>=0.16.0
+
+# --- Câmera & Reconhecimento ---
+ultralytics>=8.0.0        # YOLOv8 — detecção de objetos (auto-download modelo ~6 MB)
+# face-recognition>=1.3.0  # Reconhecimento facial por nome (opcional — requer dlib+CMake)
+#   → Para instalar: pip install cmake dlib face-recognition
+
+# --- Utilitaires ---
+python-dotenv
+colorama>=0.4.0
+tenacity>=8.0.0
+pyperclip>=1.8.0
+numpy>=1.24.0
+psutil>=5.9.0
+
+# --- Windows ---
+pypiwin32>=223
+pywin32>=300
+comtypes>=1.4.0
+
+# --- Divers ---
+pydantic>=2.0.0
+packaging>=23.0
