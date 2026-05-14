@@ -131,6 +131,12 @@ let realtimeStream: MediaStream | null = null;
 let realtimeAudio: HTMLAudioElement | null = null;
 let realtimeActive = false;
 
+function sendRealtimeEvent(payload: object): void {
+  if (realtimeDc && realtimeDc.readyState === "open") {
+    realtimeDc.send(JSON.stringify(payload));
+  }
+}
+
 // ── Orbe 3D ───────────────────────────────────────────────────
 const orb = createOrb(canvas);
 
@@ -379,6 +385,9 @@ async function startRealtime(): Promise<void> {
         if (data.type === "response.audio_transcript.done" && data.transcript) {
           showSubtitle(data.transcript);
         }
+        if (data.type === "response.function_call_arguments.done" && data.name === "executar_rony") {
+          handleRonyToolCall(data.call_id, data.arguments);
+        }
         if (data.type === "input_audio_buffer.speech_started") applyState("listening");
         if (data.type === "response.created") applyState("thinking");
         if (data.type === "response.done") applyState("listening");
@@ -423,6 +432,40 @@ function stopRealtime(): void {
   realtimeAudio = null;
   setRealtimeActive(false);
   applyState("idle");
+}
+
+async function handleRonyToolCall(callId: string, rawArguments: string): Promise<void> {
+  try {
+    const args = JSON.parse(rawArguments || "{}");
+    const comando = String(args.comando || "").trim();
+    const response = await fetch("/api/realtime-tool", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ comando }),
+    });
+    const data = await response.json();
+    const output = data.resultado || "Ferramenta executada sem retorno.";
+
+    sendRealtimeEvent({
+      type: "conversation.item.create",
+      item: {
+        type: "function_call_output",
+        call_id: callId,
+        output,
+      },
+    });
+    sendRealtimeEvent({ type: "response.create" });
+  } catch (error) {
+    sendRealtimeEvent({
+      type: "conversation.item.create",
+      item: {
+        type: "function_call_output",
+        call_id: callId,
+        output: error instanceof Error ? error.message : "Erro ao executar ferramenta local.",
+      },
+    });
+    sendRealtimeEvent({ type: "response.create" });
+  }
 }
 
 muteBtn.onclick = () => {

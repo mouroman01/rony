@@ -1880,9 +1880,29 @@ def _iniciar_servidor_frontend() -> bool:
                         "model": OPENAI_REALTIME_MODEL,
                         "instructions": (
                             "Voce e R.O.N.Y, um assistente pessoal de voz. "
-                            "Responda em portugues do Brasil por padrao, de forma curta, natural e util."
+                            "Responda em portugues do Brasil por padrao, de forma curta, natural e util. "
+                            "Quando o usuario pedir uma acao no computador, use a ferramenta executar_rony."
                         ),
                         "audio": {"output": {"voice": OPENAI_REALTIME_VOICE}},
+                        "tool_choice": "auto",
+                        "tools": [
+                            {
+                                "type": "function",
+                                "name": "executar_rony",
+                                "description": "Executa comandos locais seguros do R.O.N.Y, como abrir sites, YouTube, buscar na internet, volume, arquivos, print e aplicativos.",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "comando": {
+                                            "type": "string",
+                                            "description": "Comando natural do usuario para o R.O.N.Y executar.",
+                                        }
+                                    },
+                                    "required": ["comando"],
+                                    "additionalProperties": False,
+                                },
+                            }
+                        ],
                     },
                 }
                 try:
@@ -1906,6 +1926,34 @@ def _iniciar_servidor_frontend() -> bool:
                 return
 
             return super().do_GET()
+
+        def do_POST(self):
+            import urllib.parse
+            path = urllib.parse.urlparse(self.path).path
+            if path != "/api/realtime-tool":
+                self.send_error(404)
+                return
+
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length).decode("utf-8")
+                payload = json.loads(raw or "{}")
+                comando = str(payload.get("comando", "")).strip()
+                if not comando:
+                    self._send_json(400, {"ok": False, "resultado": "Comando vazio."})
+                    return
+
+                resultado = executar_intencao_rapida(comando)
+                if resultado:
+                    self._send_json(200, {"ok": True, "resultado": resultado})
+                    return
+
+                self._send_json(200, {
+                    "ok": False,
+                    "resultado": "Nao encontrei uma acao local direta para esse comando. Responda ao usuario e peca para reformular se precisar executar algo.",
+                })
+            except Exception as exc:
+                self._send_json(500, {"ok": False, "resultado": f"Erro ao executar ferramenta local: {exc}"})
 
         def translate_path(self, path):
             # Serve todos os arquivos a partir do dist_dir
