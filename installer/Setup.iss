@@ -1,11 +1,11 @@
 ; ============================================================
-;  Setup.iss — Instalador profissional do R.O.N.Y
+;  Setup.iss â€” Instalador profissional do R.O.N.Y
 ;  Ferramenta: Inno Setup 6 (https://jrsoftware.org/isinfo.php)
 ;
 ;  Para compilar:
 ;    scripts\GERAR_INSTALADOR.bat
 ;
-;  Para atualizar a versão:
+;  Para atualizar a versÃ£o:
 ;    1. Altere MyAppVersion abaixo
 ;    2. Atualize update_manifest.json na raiz
 ;    3. Compile e publique no GitHub Releases
@@ -18,7 +18,7 @@
 #define MyAppExeName   "Rony.exe"
 #define MyAppId        "RONY-ASSISTENTE-PESSOAL-2025-V1"
 
-; ── Configuração geral ────────────────────────────────────────
+; â”€â”€ ConfiguraÃ§Ã£o geral â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 [Setup]
 AppId={#MyAppId}
 AppName={#MyAppName}
@@ -34,11 +34,11 @@ DefaultDirName={localappdata}\Programs\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 
-; Saída
+; SaÃ­da
 OutputDir=..\installer_output
 OutputBaseFilename=Rony_Setup_{#MyAppVersion}
 
-; Compressão
+; CompressÃ£o
 Compression=lzma2/ultra64
 SolidCompression=yes
 LZMAUseSeparateProcess=yes
@@ -52,21 +52,21 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 
-; Registro de versão
+; Registro de versÃ£o
 VersionInfoVersion={#MyAppVersion}
 VersionInfoCompany={#MyAppPublisher}
-VersionInfoDescription={#MyAppName} — Assistente Pessoal Inteligente
+VersionInfoDescription={#MyAppName} â€” Assistente Pessoal Inteligente
 VersionInfoProductName={#MyAppName}
 
-; ── Idiomas ───────────────────────────────────────────────────
+; â”€â”€ Idiomas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 [Languages]
 Name: "ptbr";    MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
-; ── Tarefas opcionais ─────────────────────────────────────────
+; â”€â”€ Tarefas opcionais â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 [Tasks]
 Name: "desktopicon"; \
-  Description: "Criar atalho na Área de Trabalho"; \
+  Description: "Criar atalho na Ãrea de Trabalho"; \
   GroupDescription: "Atalhos adicionais:"; \
   Flags: checkedonce
 Name: "startupicon"; \
@@ -74,14 +74,14 @@ Name: "startupicon"; \
   GroupDescription: "Atalhos adicionais:"; \
   Flags: unchecked
 
-; ── Arquivos a instalar ──────────────────────────────────────
+; â”€â”€ Arquivos a instalar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 [Files]
-; Executável launcher (gerado por GERAR_EXECUTAVEL.bat)
+; ExecutÃ¡vel launcher (gerado por GERAR_EXECUTAVEL.bat)
 Source: "..\release\{#MyAppExeName}"; \
   DestDir: "{app}"; \
   Flags: ignoreversion
 
-; Código-fonte Python (módulos principais)
+; CÃ³digo-fonte Python (mÃ³dulos principais)
 Source: "..\*.py";   DestDir: "{app}"; Flags: ignoreversion
 Source: "..\*.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\*.txt";  DestDir: "{app}"; Flags: ignoreversion
@@ -92,11 +92,11 @@ Source: "..\*.md";   DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntex
 Source: "..\.env.example"; DestDir: "{app}"; \
   Flags: ignoreversion skipifsourcedoesntexist
 
-; Ícone da aplicação
+; Ãcone da aplicaÃ§Ã£o
 Source: "..\app.ico"; DestDir: "{app}"; \
   Flags: ignoreversion skipifsourcedoesntexist
 
-; Frontend pré-compilado
+; Frontend prÃ©-compilado
 Source: "..\frontend\dist\*"; DestDir: "{app}\frontend\dist"; \
   Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
@@ -104,13 +104,12 @@ Source: "..\frontend\dist\*"; DestDir: "{app}\frontend\dist"; \
 Source: "..\\_setup\*"; DestDir: "{app}\_setup"; \
   Flags: ignoreversion recursesubdirs createallsubdirs skipifsourcedoesntexist
 
-; ── Atalhos ───────────────────────────────────────────────────
+; â”€â”€ Atalhos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 [Icons]
 ; Menu Iniciar
 Name: "{group}\{#MyAppName}"; \
   Filename: "{app}\{#MyAppExeName}"; \
   WorkingDir: "{app}"; \
-  IconFilename: "{app}\{#MyAppExeName}"; \
   IconFilename: "{app}\{#MyAppExeName}"; \
   AppUserModelID: "RONY.AssistentePessoal.Desktop"
 
@@ -121,7 +120,7 @@ Name: "{group}\Configurar {#MyAppName}"; \
 Name: "{group}\Desinstalar {#MyAppName}"; \
   Filename: "{uninstallexe}"
 
-; Área de Trabalho (opcional)
+; Ãrea de Trabalho (opcional)
 Name: "{autodesktop}\{#MyAppName}"; \
   Filename: "{app}\{#MyAppExeName}"; \
   WorkingDir: "{app}"; \
@@ -133,16 +132,17 @@ Name: "{autodesktop}\{#MyAppName}"; \
 Name: "{userstartup}\{#MyAppName}"; \
   Filename: "{app}\{#MyAppExeName}"; \
   WorkingDir: "{app}"; \
+  IconFilename: "{app}\{#MyAppExeName}"; \
   AppUserModelID: "RONY.AssistentePessoal.Desktop"; \
   Tasks: startupicon
 
-; ── Execução pós-instalação ──────────────────────────────────
+; â”€â”€ ExecuÃ§Ã£o pÃ³s-instalaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 [Run]
-; Instala dependências Python e builda frontend (pode demorar 2-5 min)
+; Instala dependÃªncias Python e builda frontend (pode demorar 2-5 min)
 Filename: "{cmd}"; \
   Parameters: "/c ""{app}\INSTALAR.bat"""; \
   WorkingDir: "{app}"; \
-  StatusMsg: "Instalando dependências (pode demorar alguns minutos)..."; \
+  StatusMsg: "Instalando dependÃªncias (pode demorar alguns minutos)..."; \
   Flags: waituntilterminated
 
 ; Pergunta se quer iniciar agora
@@ -151,16 +151,16 @@ Filename: "{app}\{#MyAppExeName}"; \
   WorkingDir: "{app}"; \
   Flags: nowait postinstall skipifsilent
 
-; ── Limpeza na desinstalação ──────────────────────────────────
+; â”€â”€ Limpeza na desinstalaÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 [UninstallDelete]
-; Remove o venv criado pós-instalação (maior parte do espaço)
+; Remove o venv criado pÃ³s-instalaÃ§Ã£o (maior parte do espaÃ§o)
 Type: filesandordirs; Name: "{app}\venv"
 ; Remove cache Python
 Type: filesandordirs; Name: "{app}\__pycache__"
-; Remove build temporários do frontend
+; Remove build temporÃ¡rios do frontend
 Type: filesandordirs; Name: "{app}\frontend\node_modules"
 
-; ── Código Pascal — verificação de pré-requisitos ─────────────
+; â”€â”€ CÃ³digo Pascal â€” verificaÃ§Ã£o de prÃ©-requisitos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 [Code]
 var
   RonyConfigPage: TInputQueryWizardPage;
@@ -267,19 +267,35 @@ function InitializeSetup(): Boolean;
 var
   PythonPath: String;
   ResultCode: Integer;
+  HasPython: Boolean;
 begin
   Result := True;
+  HasPython := False;
 
-  // Verifica se Python 3.10+ está instalado
-  if not RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.12\InstallPath', '', PythonPath) and
-     not RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.11\InstallPath', '', PythonPath) and
-     not RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.10\InstallPath', '', PythonPath) and
-     not RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.12\InstallPath', '', PythonPath) and
-     not RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.11\InstallPath', '', PythonPath) and
-     not RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.10\InstallPath', '', PythonPath) then
+  // Verifica se Python 3.10+ esta instalado
+  if Exec(ExpandConstant('{cmd}'), '/C py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+    HasPython := True;
+
+  if (not HasPython) and Exec(ExpandConstant('{cmd}'), '/C python -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+    HasPython := True;
+
+  if (not HasPython) and (
+     RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.14\InstallPath', '', PythonPath) or
+     RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.13\InstallPath', '', PythonPath) or
+     RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.12\InstallPath', '', PythonPath) or
+     RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.11\InstallPath', '', PythonPath) or
+     RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.10\InstallPath', '', PythonPath) or
+     RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.14\InstallPath', '', PythonPath) or
+     RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.13\InstallPath', '', PythonPath) or
+     RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.12\InstallPath', '', PythonPath) or
+     RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.11\InstallPath', '', PythonPath) or
+     RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.10\InstallPath', '', PythonPath)) then
+    HasPython := True;
+
+  if not HasPython then
   begin
     if MsgBox(
-      'Python 3.10 ou superior não foi encontrado.' + #13#10 + #13#10 +
+      'Python 3.10 ou superior nao foi encontrado.' + #13#10 + #13#10 +
       'O Rony requer Python 3.10+ para funcionar.' + #13#10 +
       'Deseja abrir o site de download do Python?',
       mbConfirmation, MB_YESNO
