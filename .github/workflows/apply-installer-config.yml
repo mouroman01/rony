@@ -21,156 +21,235 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Patch installer and assistant name support
+      - name: Apply installer configuration patch
         shell: pwsh
         run: |
-          $script = @'
-          from pathlib import Path
-
-          def replace_once(text, old, new, label):
-              if old not in text:
-                  raise SystemExit(f"Missing marker: {label}")
-              return text.replace(old, new, 1)
-
-          wizard = Path("_setup/setup_wizard.py")
-          text = wizard.read_text(encoding="utf-8")
-          if '"nom_assistant": "Rony"' not in text:
-              text = replace_once(text, '        "nom_utilisateur": "",\n', '        "nom_utilisateur": "",\n        "nom_assistant": "Rony",\n', "wizard assistant default")
-          wizard.write_text(text, encoding="utf-8")
-
-          main = Path("main.py")
-          text = main.read_text(encoding="utf-8")
-          if "def _nome_assistente" not in text:
-              text = replace_once(text, 'def _nome_usuario() -> str:\n    return _carregar_config().get("nom_utilisateur", "")\n\n', 'def _nome_usuario() -> str:\n    return _carregar_config().get("nom_utilisateur", "")\n\ndef _nome_assistente() -> str:\n    nome = str(_carregar_config().get("nom_assistant", "")).strip()\n    return nome or "Rony"\n\n', "assistant helper")
-          if "assistant_name = _nome_assistente()" not in text:
-              text = replace_once(text, '    nome     = _nome_usuario()\n', '    nome     = _nome_usuario()\n    assistant_name = _nome_assistente()\n', "assistant prompt var")
-          replacements = {
-              'Você é Rony — um assistente pessoal inteligente, caloroso e genuinamente útil.': 'Você é {assistant_name} — um assistente pessoal inteligente, caloroso e genuinamente útil.',
-              'Jamais mencione JARVIS. Você é Rony, e sempre foi.': 'Jamais mencione JARVIS. Você é {assistant_name}, e sempre foi.',
-              'Tu es Rony — un assistant personnel intelligent, chaleureux et vraiment utile.': 'Tu es {assistant_name} — un assistant personnel intelligent, chaleureux et vraiment utile.',
-              "Ne mentionne jamais JARVIS. Tu es Rony, et tu l'as toujours été.": "Ne mentionne jamais JARVIS. Tu es {assistant_name}, et tu l'as toujours été.",
-              'You are Rony — an intelligent, warm, and genuinely helpful personal assistant.': 'You are {assistant_name} — an intelligent, warm, and genuinely helpful personal assistant.',
-              'Never mention JARVIS. You are Rony, and always have been.': 'Never mention JARVIS. You are {assistant_name}, and always have been.',
-              'Eres Rony — un asistente personal inteligente, cálido y genuinamente útil.': 'Eres {assistant_name} — un asistente personal inteligente, cálido y genuinamente útil.',
-              'Du bist Rony — ein intelligenter, warmherziger und wirklich hilfreicher persönlicher Assistent.': 'Du bist {assistant_name} — ein intelligenter, warmherziger und wirklich hilfreicher persönlicher Assistent.',
-          }
-          for old, new in replacements.items():
-              text = text.replace(old, new)
-          if "assistant_realtime_name = _nome_assistente()" not in text:
-              text = replace_once(text, '                payload = {\n', '                assistant_realtime_name = _nome_assistente()\n                payload = {\n', "realtime assistant var")
-              text = text.replace('"Voce e R.O.N.Y, um assistente pessoal de voz. "', 'f"Voce e {assistant_realtime_name}, um assistente pessoal de voz. "')
-          main.write_text(text, encoding="utf-8")
-
-          setup = Path("installer/Setup.iss")
-          text = setup.read_text(encoding="utf-8")
-          if "RonyConfigPage" not in text:
-              code_prefix = r'''
-[Code]
-var
-  RonyConfigPage: TInputQueryWizardPage;
-
-procedure InitializeWizard();
-begin
-  RonyConfigPage := CreateInputQueryPage(
-    wpSelectDir,
-    'Configuracao inicial do Rony',
-    'Informe os dados basicos e as chaves de API.',
-    'Voce pode deixar as chaves em branco e configurar depois. Se nao informar um nome para o assistente, ele continuara como Rony.'
-  );
-
-  RonyConfigPage.Add('Como a pessoa quer ser chamada?', False);
-  RonyConfigPage.Add('Nome do assistente:', False);
-  RonyConfigPage.Add('Gemini API Key:', True);
-  RonyConfigPage.Add('Groq API Key:', True);
-  RonyConfigPage.Add('OpenAI API Key:', True);
-  RonyConfigPage.Add('Anthropic API Key:', True);
-  RonyConfigPage.Add('XAI/Grok API Key:', True);
-
-  RonyConfigPage.Values[1] := 'Rony';
-end;
-
-function JsonEscape(Value: String): String;
-begin
-  Result := Value;
-  StringChangeEx(Result, '\', '\\', True);
-  StringChangeEx(Result, '"', '\"', True);
-end;
-
-function EnvHasApiInput(): Boolean;
-begin
-  Result :=
-    (Trim(RonyConfigPage.Values[2]) <> '') or
-    (Trim(RonyConfigPage.Values[3]) <> '') or
-    (Trim(RonyConfigPage.Values[4]) <> '') or
-    (Trim(RonyConfigPage.Values[5]) <> '') or
-    (Trim(RonyConfigPage.Values[6]) <> '');
-end;
-
-procedure SaveRonyInstallerConfig();
-var
-  EnvText: String;
-  ConfigDir: String;
-  ConfigPath: String;
-  ConfigText: String;
-  UserName: String;
-  AssistantName: String;
-begin
-  UserName := Trim(RonyConfigPage.Values[0]);
-  AssistantName := Trim(RonyConfigPage.Values[1]);
-  if AssistantName = '' then
-    AssistantName := 'Rony';
-
-  if EnvHasApiInput() then
-  begin
-    EnvText :=
-      '# Configurado pelo instalador do Rony' + #13#10 +
-      'GEMINI_API_KEY=' + Trim(RonyConfigPage.Values[2]) + #13#10 +
-      'GROQ_API_KEY=' + Trim(RonyConfigPage.Values[3]) + #13#10 +
-      'OPENAI_API_KEY=' + Trim(RonyConfigPage.Values[4]) + #13#10 +
-      'ANTHROPIC_API_KEY=' + Trim(RonyConfigPage.Values[5]) + #13#10 +
-      'XAI_API_KEY=' + Trim(RonyConfigPage.Values[6]) + #13#10;
-    SaveStringToFile(ExpandConstant('{app}\.env'), EnvText, False);
-  end;
-
-  ConfigDir := ExpandConstant('{localappdata}\Rony\data');
-  ForceDirectories(ConfigDir);
-  ConfigPath := ConfigDir + '\rony_config.json';
-  ConfigText :=
-    '{' + #13#10 +
-    '  "version": "1.0.0",' + #13#10 +
-    '  "mic_device_index": null,' + #13#10 +
-    '  "langue_defaut": "pt",' + #13#10 +
-    '  "auto_detect_langue": true,' + #13#10 +
-    '  "ws_port": 8765,' + #13#10 +
-    '  "frontend_port": 5173,' + #13#10 +
-    '  "tts_rate": "+0%",' + #13#10 +
-    '  "tts_volume": "+0%",' + #13#10 +
-    '  "historique_max_ram": 30,' + #13#10 +
-    '  "historique_max_disk": 300,' + #13#10 +
-    '  "ia_ordre": ["gemini", "claude", "groq", "openai"],' + #13#10 +
-    '  "quota_cooldown_sec": 30,' + #13#10 +
-    '  "captures_max": 50,' + #13#10 +
-    '  "nom_utilisateur": "' + JsonEscape(UserName) + '",' + #13#10 +
-    '  "nom_assistant": "' + JsonEscape(AssistantName) + '",' + #13#10 +
-    '  "personalidade": "amigavel",' + #13#10 +
-    '  "humor": true' + #13#10 +
-    '}' + #13#10;
-  SaveStringToFile(ConfigPath, ConfigText, False);
-end;
-'''
-              text = replace_once(text, "[Code]\n", code_prefix + "\n", "code prefix")
-              text = text + r'''
-
-procedure CurStepChanged(CurStep: TSetupStep);
-begin
-  if CurStep = ssPostInstall then
-    SaveRonyInstallerConfig();
-end;
-'''
-          setup.write_text(text, encoding="utf-8")
-          '@
-          Set-Content -LiteralPath _apply_installer_config.py -Value $script -Encoding UTF8
-          python _apply_installer_config.py
+          $patch = @'
+diff --git a/_setup/setup_wizard.py b/_setup/setup_wizard.py
+index eb8b113..b8b8bc3 100644
+--- a/_setup/setup_wizard.py
++++ b/_setup/setup_wizard.py
+@@ -167,6 +167,7 @@ def carregar_config() -> dict:
+         "quota_cooldown_sec": 30,
+         "captures_max": 50,
+         "nom_utilisateur": "",
++        "nom_assistant": "Rony",
+         "personalidade": "amigavel",
+         "humor": True,
+     }
+diff --git a/installer/Setup.iss b/installer/Setup.iss
+index 1c9b7ec..5c14689 100644
+--- a/installer/Setup.iss
++++ b/installer/Setup.iss
+@@ -160,8 +160,109 @@ Type: filesandordirs; Name: "{app}\__pycache__"
+ Type: filesandordirs; Name: "{app}\frontend\node_modules"
+ 
+ ; ── Código Pascal — verificação de pré-requisitos ─────────────
+-[Code]
+-function InitializeSetup(): Boolean;
++[Code]
++var
++  RonyConfigPage: TInputQueryWizardPage;
++
++function JsonEscape(Value: String): String;
++begin
++  StringChangeEx(Value, '\', '\\', True);
++  StringChangeEx(Value, '"', '\"', True);
++  Result := Value;
++end;
++
++function EnvHasApiInput(): Boolean;
++begin
++  Result :=
++    (Trim(RonyConfigPage.Values[2]) <> '') or
++    (Trim(RonyConfigPage.Values[3]) <> '') or
++    (Trim(RonyConfigPage.Values[4]) <> '') or
++    (Trim(RonyConfigPage.Values[5]) <> '') or
++    (Trim(RonyConfigPage.Values[6]) <> '');
++end;
++
++procedure InitializeWizard();
++begin
++  RonyConfigPage := CreateInputQueryPage(
++    wpSelectDir,
++    'Configuracao inicial do Rony',
++    'Informe como o Rony deve se identificar e quais APIs ja deseja usar.',
++    'Esses dados podem ficar em branco. O Rony continuara usando o nome padrao se nenhum nome de assistente for informado.'
++  );
++
++  RonyConfigPage.Add('Como a pessoa quer ser chamada?', False);
++  RonyConfigPage.Add('Nome do assistente:', False);
++  RonyConfigPage.Add('Gemini API Key:', True);
++  RonyConfigPage.Add('Groq API Key:', True);
++  RonyConfigPage.Add('OpenAI API Key:', True);
++  RonyConfigPage.Add('Anthropic API Key:', True);
++  RonyConfigPage.Add('XAI/Grok API Key:', True);
++  RonyConfigPage.Values[1] := 'Rony';
++end;
++
++procedure SaveRonyInstallerConfig();
++var
++  DataDir: String;
++  EnvPath: String;
++  ConfigPath: String;
++  UserName: String;
++  AssistantName: String;
++  EnvText: String;
++  ConfigText: String;
++begin
++  if not Assigned(RonyConfigPage) then
++    Exit;
++
++  UserName := Trim(RonyConfigPage.Values[0]);
++  AssistantName := Trim(RonyConfigPage.Values[1]);
++  if AssistantName = '' then
++    AssistantName := 'Rony';
++
++  if EnvHasApiInput() then
++  begin
++    EnvPath := ExpandConstant('{app}\.env');
++    EnvText :=
++      'GEMINI_API_KEY=' + Trim(RonyConfigPage.Values[2]) + #13#10 +
++      'GROQ_API_KEY=' + Trim(RonyConfigPage.Values[3]) + #13#10 +
++      'OPENAI_API_KEY=' + Trim(RonyConfigPage.Values[4]) + #13#10 +
++      'ANTHROPIC_API_KEY=' + Trim(RonyConfigPage.Values[5]) + #13#10 +
++      'XAI_API_KEY=' + Trim(RonyConfigPage.Values[6]) + #13#10;
++    SaveStringToFile(EnvPath, EnvText, False);
++  end;
++
++  DataDir := ExpandConstant('{localappdata}\Rony\data');
++  ForceDirectories(DataDir);
++  ConfigPath := DataDir + '\rony_config.json';
++  ConfigText :=
++    '{' + #13#10 +
++    '  "version": "1.0.0",' + #13#10 +
++    '  "mic_device_index": null,' + #13#10 +
++    '  "langue_defaut": "pt",' + #13#10 +
++    '  "auto_detect_langue": true,' + #13#10 +
++    '  "ws_port": 8765,' + #13#10 +
++    '  "frontend_port": 5173,' + #13#10 +
++    '  "tts_rate": "+0%",' + #13#10 +
++    '  "tts_volume": "+0%",' + #13#10 +
++    '  "historique_max_ram": 30,' + #13#10 +
++    '  "historique_max_disk": 300,' + #13#10 +
++    '  "ia_ordre": ["gemini", "claude", "groq", "openai"],' + #13#10 +
++    '  "quota_cooldown_sec": 30,' + #13#10 +
++    '  "captures_max": 50,' + #13#10 +
++    '  "nom_utilisateur": "' + JsonEscape(UserName) + '",' + #13#10 +
++    '  "nom_assistant": "' + JsonEscape(AssistantName) + '",' + #13#10 +
++    '  "personalidade": "amigavel",' + #13#10 +
++    '  "humor": true' + #13#10 +
++    '}' + #13#10;
++  SaveStringToFile(ConfigPath, ConfigText, False);
++end;
++
++procedure CurStepChanged(CurStep: TSetupStep);
++begin
++  if CurStep = ssPostInstall then
++    SaveRonyInstallerConfig();
++end;
++
++function InitializeSetup(): Boolean;
+ var
+   PythonPath: String;
+   ResultCode: Integer;
+diff --git a/main.py b/main.py
+index d216ee8..671eb5d 100644
+--- a/main.py
++++ b/main.py
+@@ -238,6 +238,11 @@ def _carregar_config() -> dict:
+ def _nome_usuario() -> str:
+     return _carregar_config().get("nom_utilisateur", "")
+ 
++def _nome_assistente() -> str:
++    nome = str(_carregar_config().get("nom_assistant", "")).strip()
++    return nome or "Rony"
++
++
+ def _humor_ativo() -> bool:
+     return _carregar_config().get("humor", True)
+ 
+@@ -252,6 +257,7 @@ def construire_system_prompt() -> str:
+     heure    = datetime.now().strftime("%H:%M")
+     data_str = datetime.now().strftime("%A, %d de %B de %Y")
+     nome     = _nome_usuario()
++    assistant_name = _nome_assistente()
+     humor    = _humor_ativo()
+ 
+     # Saudação por hora
+@@ -276,7 +282,7 @@ def construire_system_prompt() -> str:
+     } if humor else {}
+ 
+     prompts = {
+-        "pt": f"""Você é Rony — um assistente pessoal inteligente, caloroso e genuinamente útil.
++        "pt": f"""Você é {assistant_name} — um assistente pessoal inteligente, caloroso e genuinamente útil.
+ Você fala com {nome if nome else 'o usuário'} como um amigo próximo e competente, não como um robô.
+ 
+ Contexto atual:
+@@ -309,9 +315,9 @@ Regras:
+ - Responda SEMPRE no idioma em que o usuário falar.
+ - Você tem autonomia total para executar qualquer tarefa no computador — use as ferramentas disponíveis sem hesitar.
+ - Ações do sistema são executadas automaticamente — não precisa descrevê-las em detalhes técnicos.
+-- Jamais mencione JARVIS. Você é Rony, e sempre foi.""",
++- Jamais mencione JARVIS. Você é {assistant_name}, e sempre foi.""",
+ 
+-        "fr": f"""Tu es Rony — un assistant personnel intelligent, chaleureux et vraiment utile.
++        "fr": f"""Tu es {assistant_name} — un assistant personnel intelligent, chaleureux et vraiment utile.
+ Tu parles à {nome if nome else "l'utilisateur"} comme un ami proche et compétent, pas comme un robot.
+ 
+ Contexte actuel :
+@@ -344,9 +350,9 @@ Règles :
+ - Réponds TOUJOURS dans la langue dans laquelle l'utilisateur te parle.
+ - Tu as une autonomie totale pour exécuter n'importe quelle tâche — utilise les outils disponibles sans hésitation.
+ - Les actions système s'exécutent automatiquement — inutile de les décrire techniquement.
+-- Ne mentionne jamais JARVIS. Tu es Rony, et tu l'as toujours été.""",
++- Ne mentionne jamais JARVIS. Tu es {assistant_name}, et tu l'as toujours été.""",
+ 
+-        "en": f"""You are Rony — an intelligent, warm, and genuinely helpful personal assistant.
++        "en": f"""You are {assistant_name} — an intelligent, warm, and genuinely helpful personal assistant.
+ You talk to {nome if nome else "the user"} like a close, competent friend — not like a robot.
+ 
+ Current context:
+@@ -379,9 +385,9 @@ Rules:
+ - ALWAYS respond in the language the user speaks to you.
+ - You have full autonomy to execute any task on the computer — use available tools without hesitation.
+ - System actions execute automatically — no need to describe them technically.
+-- Never mention JARVIS. You are Rony, and always have been.""",
++- Never mention JARVIS. You are {assistant_name}, and always have been.""",
+ 
+-        "es": f"""Eres Rony — un asistente personal inteligente, cálido y genuinamente útil.
++        "es": f"""Eres {assistant_name} — un asistente personal inteligente, cálido y genuinamente útil.
+ Hablas con {nome if nome else "el usuario"} como un amigo cercano y competente, no como un robot.
+ 
+ Contexto actual:
+@@ -402,7 +408,7 @@ Capacidades: Archivos, apps, música, clima, hogar inteligente, emails, calendar
+ 
+ Reglas: Responde SIEMPRE en el idioma del usuario. Nunca menciones JARVIS.""",
+ 
+-        "de": f"""Du bist Rony — ein intelligenter, warmherziger und wirklich hilfreicher persönlicher Assistent.
++        "de": f"""Du bist {assistant_name} — ein intelligenter, warmherziger und wirklich hilfreicher persönlicher Assistent.
+ Du sprichst mit {nome if nome else "dem Benutzer"} wie ein enger, kompetenter Freund — nicht wie ein Roboter.
+ 
+ Aktueller Kontext:
+@@ -2195,13 +2201,14 @@ def _iniciar_servidor_frontend() -> bool:
+                     self._send_json(400, {"error": "OPENAI_API_KEY nao configurada no .env."})
+                     return
+ 
++                assistant_realtime_name = _nome_assistente()
+                 payload = {
+                     "expires_after": {"anchor": "created_at", "seconds": 600},
+                     "session": {
+                         "type": "realtime",
+                         "model": OPENAI_REALTIME_MODEL,
+                         "instructions": (
+-                            "Voce e R.O.N.Y, um assistente pessoal de voz. "
++                            f"Voce e {assistant_realtime_name}, um assistente pessoal de voz. "
+                             "Responda em portugues do Brasil por padrao, de forma curta, natural e util. "
+                             "Quando o usuario pedir uma acao no computador, use a ferramenta executar_rony."
+                         ),
+'@
+          Set-Content -LiteralPath installer-config.patch -Value $patch -Encoding UTF8
+          git apply installer-config.patch
           python -m py_compile main.py _setup\setup_wizard.py launcher.py _setup\criar_atalho.py
 
       - name: Commit changes
