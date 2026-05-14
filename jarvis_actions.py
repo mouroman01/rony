@@ -16,7 +16,7 @@ from file_manager import (
     pesquisar_arquivos,
     resoudre_chemin,
 )
-from internet_search import pesquisar_e_resumir, pesquisar_viabilidade
+from internet_search import buscar_web, pesquisar_e_resumir, pesquisar_viabilidade
 from rony_paths import DATA_DIR
 from vision_module import capturer_et_sauvegarder
 
@@ -89,6 +89,49 @@ def _site_search_url(site: str, consulta: str) -> str:
     if site == "google":
         return f"https://www.google.com/search?q={q}"
     return SITES[site]
+
+
+def _extrair_consulta_youtube(texto: str) -> str:
+    t = _strip_wake_word(texto)
+    padroes = [
+        r"(?:abre|abra|abrir|toca|toque|coloca|coloque|reproduz|reproduzir)\s+(?:um\s+)?(?:video|videos|vÃ­deo|vÃ­deos)\s+(?:no youtube\s+)?(?:sobre|de|do|da)?\s*(.+)",
+        r"(?:abre|abra|abrir|toca|toque|coloca|coloque|reproduz|reproduzir)\s+(?:no youtube\s+)?(.+?)\s+(?:no youtube)$",
+        r"(?:youtube)\s+(?:abre|abra|abrir|toca|toque|coloca|coloque|reproduz|reproduzir)\s+(?:um\s+)?(?:video|videos|vÃ­deo|vÃ­deos)?\s*(?:sobre|de|do|da)?\s*(.+)",
+    ]
+    for padrao in padroes:
+        m = re.search(padrao, t)
+        if m:
+            consulta = m.group(1).strip(" .,!?'\"")
+            consulta = re.sub(r"^(?:sobre|de|do|da)\s+", "", consulta).strip()
+            if consulta and consulta not in {"youtube", "video", "videos"}:
+                return consulta
+    return ""
+
+
+def _buscar_video_youtube(texto: str) -> Optional[str]:
+    t = _strip_wake_word(texto)
+    if "youtube" not in t and not any(p in t for p in ("video", "videos", "vÃ­deo", "vÃ­deos")):
+        return None
+    if any(p in t for p in ("pesquisa", "pesquisar", "procura", "procurar", "busca", "buscar")):
+        return None
+
+    consulta = _extrair_consulta_youtube(t)
+    if not consulta or len(consulta) < 3:
+        return None
+
+    try:
+        resultados = buscar_web(f"site:youtube.com/watch {consulta}", limite=5)
+        for item in resultados:
+            url = item.get("url", "")
+            titulo = item.get("title", "").strip()
+            if "youtube.com/watch" in url or "youtu.be/" in url:
+                webbrowser.open(url)
+                return f"Abrindo no YouTube: {titulo or consulta}."
+    except Exception:
+        pass
+
+    webbrowser.open(_site_search_url("youtube", consulta))
+    return f"Nao consegui escolher um video com seguranca, entao abri a busca do YouTube por {consulta}."
 
 
 def _extrair_consulta_web(texto: str) -> str:
@@ -386,6 +429,7 @@ def executar_intencao_rapida(texto: str) -> Optional[str]:
         _buscar_na_internet,
         _controlar_volume,
         _captura_tela,
+        _buscar_video_youtube,
         _abrir_site,
         _abrir_camera,
         _abrir_recente,
