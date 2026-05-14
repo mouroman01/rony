@@ -38,6 +38,7 @@
   <div id="controls">
     <button id="mute-button"     class="ctrl-btn" title="Mute / Unmute">mute</button>
     <button id="realtime-button" class="ctrl-btn" title="Realtime voice">realtime</button>
+    <button id="mobile-button"   class="ctrl-btn" title="Acesso pelo celular">celular</button>
     <button id="capture-button"  class="ctrl-btn" title="Screenshot">📷</button>
     <button id="keyboard-toggle" class="ctrl-btn" title="Keyboard">⌨</button>
     <button id="help-toggle"     class="ctrl-btn" title="Help">?</button>
@@ -66,6 +67,17 @@
       <h3>Select Language</h3>
       <div id="lang-list"></div>
       <button id="lang-close" class="ctrl-btn">✕</button>
+    </div>
+  </div>
+
+  <!-- Acesso pelo celular -->
+  <div id="mobile-modal" class="mobile-modal hidden">
+    <div class="mobile-modal-inner">
+      <h3>Acesso pelo celular</h3>
+      <p>Conecte o celular na mesma rede Wi-Fi e abra:</p>
+      <button id="mobile-url" class="mobile-url" type="button">carregando...</button>
+      <p id="mobile-hint" class="mobile-hint"></p>
+      <button id="mobile-close" class="ctrl-btn">✕</button>
     </div>
   </div>
 

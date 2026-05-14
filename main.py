@@ -32,6 +32,7 @@ import webbrowser
 import uuid
 import io
 import http.server
+import socket
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
@@ -2028,7 +2029,6 @@ async def _desativar_modo_realtime() -> None:
 
 def _aguardar_porta(porta: int, timeout: float = 20.0) -> bool:
     """Aguarda até a porta estar respondendo (servidor frontend pronto)."""
-    import socket
     inicio = time.time()
     while time.time() - inicio < timeout:
         try:
@@ -2038,6 +2038,49 @@ def _aguardar_porta(porta: int, timeout: float = 20.0) -> bool:
             time.sleep(0.3)
     return False
 
+
+
+def _obter_ip_local() -> str:
+    """Retorna o IP da rede local usado pelo celular para acessar o Rony."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            ip = sock.getsockname()[0]
+            if ip and not ip.startswith("127."):
+                return ip
+    except Exception:
+        pass
+
+    try:
+        return socket.gethostbyname(socket.gethostname())
+    except Exception:
+        return "localhost"
+
+
+def _liberar_firewall_windows(portas: list[int]) -> None:
+    """Tenta liberar as portas do Rony no Firewall do Windows."""
+    if os.name != "nt":
+        return
+
+    for porta in portas:
+        nome = f"Rony acesso local porta {porta}"
+        try:
+            subprocess.run(
+                [
+                    "netsh", "advfirewall", "firewall", "add", "rule",
+                    f"name={nome}",
+                    "dir=in",
+                    "action=allow",
+                    "protocol=TCP",
+                    f"localport={porta}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=8,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+        except Exception as exc:
+            print(f"[REDE] Nao foi possivel liberar a porta {porta} no firewall: {exc}")
 
 def _iniciar_servidor_frontend() -> bool:
     """
@@ -2051,6 +2094,7 @@ def _iniciar_servidor_frontend() -> bool:
 
     config   = _carregar_config()
     porta    = config.get("frontend_port", 5173)
+    ip_local = _obter_ip_local()
 
     class _Handler(http.server.SimpleHTTPRequestHandler):
         def log_message(self, *args):
@@ -2067,6 +2111,15 @@ def _iniciar_servidor_frontend() -> bool:
         def do_GET(self):
             import urllib.parse
             path = urllib.parse.urlparse(self.path).path
+            if path == "/api/mobile-info":
+                self._send_json(200, {
+                    "host": ip_local,
+                    "frontend_port": porta,
+                    "ws_port": WS_PORT,
+                    "url": f"http://{ip_local}:{porta}",
+                })
+                return
+
             if path == "/api/realtime-token":
                 if not OPENAI_KEY or OPENAI_KEY.startswith("VOTRE_"):
                     self._send_json(400, {"error": "OPENAI_API_KEY nao configurada no .env."})
@@ -2166,14 +2219,15 @@ def _iniciar_servidor_frontend() -> bool:
 
     def _run():
         try:
-            servidor = http.server.HTTPServer((LAN_HOST, porta), _Handler)
+            servidor = http.server.ThreadingHTTPServer((LAN_HOST, porta), _Handler)
             servidor.serve_forever()
         except OSError:
             pass  # Porta já em uso (ex: npm dev já rodando)
 
     t = threading.Thread(target=_run, daemon=True, name="rony-frontend-server")
     t.start()
-    print(f"[UI] Servidor frontend iniciado em http://localhost:{porta} e na rede local pela porta {porta}")
+    print(f"[UI] Servidor frontend iniciado em http://localhost:{porta}")
+    print(f"[UI] Acesso pelo celular na mesma rede: http://{ip_local}:{porta}")
     return True
 
 
@@ -2194,6 +2248,7 @@ async def main() -> None:
 
     # Servidor frontend estático (se frontend/dist existir)
     porta_fe = config_cfg.get("frontend_port", 5173)
+    _liberar_firewall_windows([porta_fe, WS_PORT])
     if _iniciar_servidor_frontend():
         await asyncio.sleep(0.3)
         if not _pywebview_mode:

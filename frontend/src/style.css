@@ -328,6 +328,62 @@ html, body {
   padding: 6px 10px;
 }
 
+/* Acesso pelo celular */
+.mobile-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px);
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s;
+}
+.mobile-modal.hidden { opacity: 0; pointer-events: none; }
+
+.mobile-modal-inner {
+  background: rgba(5,5,20,0.95);
+  border: 1px solid var(--clr-border);
+  border-radius: 14px;
+  padding: 28px 32px;
+  max-width: 460px;
+  width: 90vw;
+  position: relative;
+}
+.mobile-modal-inner h3 {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--clr-primary);
+  margin-bottom: 14px;
+}
+.mobile-modal-inner p {
+  color: var(--clr-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.mobile-url {
+  width: 100%;
+  margin: 16px 0 10px;
+  padding: 13px 14px;
+  border: 1px solid rgba(6,182,212,0.45);
+  border-radius: 8px;
+  background: rgba(6,182,212,0.12);
+  color: var(--clr-text);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 14px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.mobile-hint { min-height: 20px; }
+.mobile-modal-inner .ctrl-btn {
+  position: absolute;
+  top: 14px; right: 14px;
+  padding: 6px 10px;
+}
+
 /* ── Scrollbar ────────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -336,6 +392,7 @@ html, body {
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 480px) {
   .badge       { font-size: 10px; padding: 5px 9px; }
+  #controls    { width: min(360px, 94vw); flex-wrap: wrap; justify-content: center; bottom: 18px; gap: 8px; }
   .ctrl-btn    { padding: 8px 12px; font-size: 12px; }
   .help-inner  { padding: 20px 18px; }
   #subtitle-text { font-size: 13px; }

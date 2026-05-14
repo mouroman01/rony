@@ -23,6 +23,7 @@ const langFlagEl      = document.getElementById("lang-flag")         as HTMLSpan
 const langCodeEl      = document.getElementById("lang-code")         as HTMLSpanElement;
 const muteBtn         = document.getElementById("mute-button")       as HTMLButtonElement;
 const captureBtn      = document.getElementById("capture-button")    as HTMLButtonElement;
+const mobileBtn       = document.getElementById("mobile-button")     as HTMLButtonElement;
 const keyboardToggle  = document.getElementById("keyboard-toggle")   as HTMLButtonElement;
 const helpToggle      = document.getElementById("help-toggle")       as HTMLButtonElement;
 const keyboardHud     = document.getElementById("keyboard-hud")      as HTMLDivElement;
@@ -35,6 +36,10 @@ const langModal       = document.getElementById("lang-modal")        as HTMLDivE
 const langClose       = document.getElementById("lang-close")        as HTMLButtonElement;
 const langList        = document.getElementById("lang-list")         as HTMLDivElement;
 const realtimeBtn     = document.getElementById("realtime-button")   as HTMLButtonElement;
+const mobileModal     = document.getElementById("mobile-modal")      as HTMLDivElement;
+const mobileClose     = document.getElementById("mobile-close")      as HTMLButtonElement;
+const mobileUrlBtn    = document.getElementById("mobile-url")        as HTMLButtonElement;
+const mobileHint      = document.getElementById("mobile-hint")       as HTMLParagraphElement;
 
 // ── Badge Modo Especialista ───────────────────────────────────
 let specialistBadge: HTMLDivElement | null = null;
@@ -124,6 +129,7 @@ let isMuted      = false;
 let showKeyboard = false;
 let showHelp     = false;
 let showLangModal = false;
+let showMobileModal = false;
 let availableLangs: string[] = [];
 let realtimePc: RTCPeerConnection | null = null;
 let realtimeDc: RTCDataChannel | null = null;
@@ -326,6 +332,25 @@ function toggleLangModal(show?: boolean): void {
   if (showLangModal) buildLangList();
 }
 
+async function toggleMobileModal(show?: boolean): Promise<void> {
+  showMobileModal = show ?? !showMobileModal;
+  mobileModal.classList.toggle("hidden", !showMobileModal);
+  if (!showMobileModal) return;
+
+  mobileUrlBtn.textContent = "carregando...";
+  mobileHint.textContent = "";
+  try {
+    const response = await fetch("/api/mobile-info");
+    const data = await response.json();
+    const url = String(data.url || `${window.location.protocol}//${window.location.host}`);
+    mobileUrlBtn.textContent = url;
+    mobileHint.textContent = "Toque no endereco para copiar.";
+  } catch (_) {
+    mobileUrlBtn.textContent = `${window.location.protocol}//${window.location.host}`;
+    mobileHint.textContent = "Se nao abrir no celular, permita o Rony no Firewall do Windows.";
+  }
+}
+
 function toggleKeyboard(show?: boolean): void {
   showKeyboard = show ?? !showKeyboard;
   keyboardHud.classList.toggle("hidden", !showKeyboard);
@@ -504,6 +529,15 @@ helpToggle.onclick     = () => toggleHelp();
 helpClose.onclick      = () => toggleHelp(false);
 langBadge.onclick      = () => toggleLangModal();
 langClose.onclick      = () => toggleLangModal(false);
+mobileBtn.onclick      = () => { void toggleMobileModal(); };
+mobileClose.onclick    = () => { void toggleMobileModal(false); };
+mobileUrlBtn.onclick   = () => {
+  const url = mobileUrlBtn.textContent || "";
+  if (url.startsWith("http")) {
+    navigator.clipboard?.writeText(url);
+    mobileHint.textContent = "Endereco copiado.";
+  }
+};
 
 keyboardSend.onclick = () => {
   const text = keyboardInput.value.trim();
@@ -525,6 +559,9 @@ document.addEventListener("click", (e) => {
   if (showLangModal && !langModal.contains(e.target as Node) && !langBadge.contains(e.target as Node)) {
     toggleLangModal(false);
   }
+  if (showMobileModal && !mobileModal.contains(e.target as Node) && !mobileBtn.contains(e.target as Node)) {
+    void toggleMobileModal(false);
+  }
 });
 
 // Raccourcis clavier
@@ -532,6 +569,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     toggleHelp(false);
     toggleLangModal(false);
+    void toggleMobileModal(false);
     toggleKeyboard(false);
   }
   if ((e.ctrlKey || e.metaKey) && e.key === "k") {
@@ -549,6 +587,7 @@ subtitleBox.classList.add("hidden");
 keyboardHud.classList.add("hidden");
 helpOverlay.classList.add("hidden");
 langModal.classList.add("hidden");
+mobileModal.classList.add("hidden");
 
 // Estado inicial: veille (aguardando wake word)
 orb.setState("veille");
