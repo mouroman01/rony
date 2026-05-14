@@ -49,8 +49,12 @@ _pywebview_window = None   # referência à janela (para evaluate_js no updater)
 # ── Imports audio ─────────────────────────────────────────────
 try:
     import pygame
-    pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=512)
-    pygame.mixer.init()
+    try:
+        pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=512)
+        pygame.mixer.init()
+    except Exception as e:
+        print(f"[AVISO] Audio local indisponivel via pygame: {e}")
+        pygame = None
 except ImportError:
     pygame = None
     print("[AVERTISSEMENT] pygame non installé — audio TTS désactivé.")
@@ -485,7 +489,7 @@ async def parler(texte: str) -> None:
                 audio_b64 = base64.b64encode(f.read()).decode("utf-8")
             msg = json.dumps({"action": "audio", "text": texte_tts, "audio_b64": audio_b64, "langue": get_langue()})
             await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
-        elif pygame:
+        elif pygame and pygame.mixer.get_init():
             pygame.mixer.music.load(str(tmp))
             pygame.mixer.music.play()
             while pygame.mixer.music.get_busy():
@@ -1664,7 +1668,7 @@ async def ws_handler(websocket) -> None:
 
 async def _jouer_son_activation() -> None:
     """Toca um bipe curto de ativação via pygame."""
-    if not pygame:
+    if not pygame or not pygame.mixer.get_init():
         return
     try:
         import numpy as np
