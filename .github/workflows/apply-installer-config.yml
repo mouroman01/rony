@@ -1,0 +1,188 @@
+name: Apply installer configuration page
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-installer-config.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-installer-config:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch installer and assistant name support
+        shell: pwsh
+        run: |
+          $script = @'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"Missing marker: {label}")
+              return text.replace(old, new, 1)
+
+          wizard = Path("_setup/setup_wizard.py")
+          text = wizard.read_text(encoding="utf-8")
+          if '"nom_assistant": "Rony"' not in text:
+              text = replace_once(text, '        "nom_utilisateur": "",\n', '        "nom_utilisateur": "",\n        "nom_assistant": "Rony",\n', "wizard assistant default")
+          wizard.write_text(text, encoding="utf-8")
+
+          main = Path("main.py")
+          text = main.read_text(encoding="utf-8")
+          if "def _nome_assistente" not in text:
+              text = replace_once(text, 'def _nome_usuario() -> str:\n    return _carregar_config().get("nom_utilisateur", "")\n\n', 'def _nome_usuario() -> str:\n    return _carregar_config().get("nom_utilisateur", "")\n\ndef _nome_assistente() -> str:\n    nome = str(_carregar_config().get("nom_assistant", "")).strip()\n    return nome or "Rony"\n\n', "assistant helper")
+          if "assistant_name = _nome_assistente()" not in text:
+              text = replace_once(text, '    nome     = _nome_usuario()\n', '    nome     = _nome_usuario()\n    assistant_name = _nome_assistente()\n', "assistant prompt var")
+          replacements = {
+              'Você é Rony — um assistente pessoal inteligente, caloroso e genuinamente útil.': 'Você é {assistant_name} — um assistente pessoal inteligente, caloroso e genuinamente útil.',
+              'Jamais mencione JARVIS. Você é Rony, e sempre foi.': 'Jamais mencione JARVIS. Você é {assistant_name}, e sempre foi.',
+              'Tu es Rony — un assistant personnel intelligent, chaleureux et vraiment utile.': 'Tu es {assistant_name} — un assistant personnel intelligent, chaleureux et vraiment utile.',
+              "Ne mentionne jamais JARVIS. Tu es Rony, et tu l'as toujours été.": "Ne mentionne jamais JARVIS. Tu es {assistant_name}, et tu l'as toujours été.",
+              'You are Rony — an intelligent, warm, and genuinely helpful personal assistant.': 'You are {assistant_name} — an intelligent, warm, and genuinely helpful personal assistant.',
+              'Never mention JARVIS. You are Rony, and always have been.': 'Never mention JARVIS. You are {assistant_name}, and always have been.',
+              'Eres Rony — un asistente personal inteligente, cálido y genuinamente útil.': 'Eres {assistant_name} — un asistente personal inteligente, cálido y genuinamente útil.',
+              'Du bist Rony — ein intelligenter, warmherziger und wirklich hilfreicher persönlicher Assistent.': 'Du bist {assistant_name} — ein intelligenter, warmherziger und wirklich hilfreicher persönlicher Assistent.',
+          }
+          for old, new in replacements.items():
+              text = text.replace(old, new)
+          if "assistant_realtime_name = _nome_assistente()" not in text:
+              text = replace_once(text, '                payload = {\n', '                assistant_realtime_name = _nome_assistente()\n                payload = {\n', "realtime assistant var")
+              text = text.replace('"Voce e R.O.N.Y, um assistente pessoal de voz. "', 'f"Voce e {assistant_realtime_name}, um assistente pessoal de voz. "')
+          main.write_text(text, encoding="utf-8")
+
+          setup = Path("installer/Setup.iss")
+          text = setup.read_text(encoding="utf-8")
+          if "RonyConfigPage" not in text:
+              code_prefix = r'''
+[Code]
+var
+  RonyConfigPage: TInputQueryWizardPage;
+
+procedure InitializeWizard();
+begin
+  RonyConfigPage := CreateInputQueryPage(
+    wpSelectDir,
+    'Configuracao inicial do Rony',
+    'Informe os dados basicos e as chaves de API.',
+    'Voce pode deixar as chaves em branco e configurar depois. Se nao informar um nome para o assistente, ele continuara como Rony.'
+  );
+
+  RonyConfigPage.Add('Como a pessoa quer ser chamada?', False);
+  RonyConfigPage.Add('Nome do assistente:', False);
+  RonyConfigPage.Add('Gemini API Key:', True);
+  RonyConfigPage.Add('Groq API Key:', True);
+  RonyConfigPage.Add('OpenAI API Key:', True);
+  RonyConfigPage.Add('Anthropic API Key:', True);
+  RonyConfigPage.Add('XAI/Grok API Key:', True);
+
+  RonyConfigPage.Values[1] := 'Rony';
+end;
+
+function JsonEscape(Value: String): String;
+begin
+  Result := Value;
+  StringChangeEx(Result, '\', '\\', True);
+  StringChangeEx(Result, '"', '\"', True);
+end;
+
+function EnvHasApiInput(): Boolean;
+begin
+  Result :=
+    (Trim(RonyConfigPage.Values[2]) <> '') or
+    (Trim(RonyConfigPage.Values[3]) <> '') or
+    (Trim(RonyConfigPage.Values[4]) <> '') or
+    (Trim(RonyConfigPage.Values[5]) <> '') or
+    (Trim(RonyConfigPage.Values[6]) <> '');
+end;
+
+procedure SaveRonyInstallerConfig();
+var
+  EnvText: String;
+  ConfigDir: String;
+  ConfigPath: String;
+  ConfigText: String;
+  UserName: String;
+  AssistantName: String;
+begin
+  UserName := Trim(RonyConfigPage.Values[0]);
+  AssistantName := Trim(RonyConfigPage.Values[1]);
+  if AssistantName = '' then
+    AssistantName := 'Rony';
+
+  if EnvHasApiInput() then
+  begin
+    EnvText :=
+      '# Configurado pelo instalador do Rony' + #13#10 +
+      'GEMINI_API_KEY=' + Trim(RonyConfigPage.Values[2]) + #13#10 +
+      'GROQ_API_KEY=' + Trim(RonyConfigPage.Values[3]) + #13#10 +
+      'OPENAI_API_KEY=' + Trim(RonyConfigPage.Values[4]) + #13#10 +
+      'ANTHROPIC_API_KEY=' + Trim(RonyConfigPage.Values[5]) + #13#10 +
+      'XAI_API_KEY=' + Trim(RonyConfigPage.Values[6]) + #13#10;
+    SaveStringToFile(ExpandConstant('{app}\.env'), EnvText, False);
+  end;
+
+  ConfigDir := ExpandConstant('{localappdata}\Rony\data');
+  ForceDirectories(ConfigDir);
+  ConfigPath := ConfigDir + '\rony_config.json';
+  ConfigText :=
+    '{' + #13#10 +
+    '  "version": "1.0.0",' + #13#10 +
+    '  "mic_device_index": null,' + #13#10 +
+    '  "langue_defaut": "pt",' + #13#10 +
+    '  "auto_detect_langue": true,' + #13#10 +
+    '  "ws_port": 8765,' + #13#10 +
+    '  "frontend_port": 5173,' + #13#10 +
+    '  "tts_rate": "+0%",' + #13#10 +
+    '  "tts_volume": "+0%",' + #13#10 +
+    '  "historique_max_ram": 30,' + #13#10 +
+    '  "historique_max_disk": 300,' + #13#10 +
+    '  "ia_ordre": ["gemini", "claude", "groq", "openai"],' + #13#10 +
+    '  "quota_cooldown_sec": 30,' + #13#10 +
+    '  "captures_max": 50,' + #13#10 +
+    '  "nom_utilisateur": "' + JsonEscape(UserName) + '",' + #13#10 +
+    '  "nom_assistant": "' + JsonEscape(AssistantName) + '",' + #13#10 +
+    '  "personalidade": "amigavel",' + #13#10 +
+    '  "humor": true' + #13#10 +
+    '}' + #13#10;
+  SaveStringToFile(ConfigPath, ConfigText, False);
+end;
+'''
+              text = replace_once(text, "[Code]\n", code_prefix + "\n", "code prefix")
+              text = text + r'''
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    SaveRonyInstallerConfig();
+end;
+'''
+          setup.write_text(text, encoding="utf-8")
+          '@
+          Set-Content -LiteralPath _apply_installer_config.py -Value $script -Encoding UTF8
+          python _apply_installer_config.py
+          python -m py_compile main.py _setup\setup_wizard.py launcher.py _setup\criar_atalho.py
+
+      - name: Commit changes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py _setup/setup_wizard.py installer/Setup.iss
+          git status --short
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "feat: collect setup config during install"
+            git push
+          } else {
+            Write-Host "No source changes to commit."
+          }
