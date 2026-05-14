@@ -231,6 +231,10 @@ function send(payload: object): void {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // ── UI helpers ────────────────────────────────────────────────
 function setConnected(ok: boolean): void {
   badgeEl.className = `badge ${ok ? "connected" : "disconnected"}`;
@@ -348,6 +352,8 @@ async function startRealtime(): Promise<void> {
   try {
     errorEl.textContent = "";
     applyState("thinking");
+    send({ action: "micro", enabled: false });
+    await sleep(700);
 
     const tokenResponse = await fetch("/api/realtime-token");
     const tokenData = await tokenResponse.json();
@@ -370,7 +376,13 @@ async function startRealtime(): Promise<void> {
       applyState("speaking");
     };
 
-    realtimeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    realtimeStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
     pc.addTrack(realtimeStream.getAudioTracks()[0], realtimeStream);
 
     realtimeDc = pc.createDataChannel("oai-events");
@@ -416,7 +428,10 @@ async function startRealtime(): Promise<void> {
     await pc.setRemoteDescription(answer);
   } catch (error) {
     stopRealtime();
-    errorEl.textContent = error instanceof Error ? error.message : "Falha no Realtime";
+    const message = error instanceof Error ? error.message : "Falha no Realtime";
+    errorEl.textContent = message.includes("audio source")
+      ? "Microfone ocupado. Feche outros apps de audio ou tente novamente."
+      : message;
     applyState("idle");
   }
 }
@@ -431,6 +446,7 @@ function stopRealtime(): void {
   realtimeStream = null;
   realtimeAudio = null;
   setRealtimeActive(false);
+  send({ action: "micro", enabled: true });
   applyState("idle");
 }
 

@@ -1611,6 +1611,11 @@ async def ws_handler(websocket) -> None:
                     global STOP_PARLER
                     STOP_PARLER = True
 
+                elif action == "micro":
+                    global _micro_actif
+                    _micro_actif = bool(data.get("enabled", True))
+                    await websocket.send(json.dumps({"action": "micro_ok", "enabled": _micro_actif}))
+
                 elif action == "langue":
                     code = data.get("code", "fr")
                     definir_langue(code)
