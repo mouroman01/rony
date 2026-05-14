@@ -122,7 +122,18 @@ def youtube_music_lancer(requete: str = None) -> str:
     else:
         url = YOUTUBE_MUSIC_URL
     webbrowser.open(url)
-    return f"YouTube Music{'  : ' + requete if requete else ''} ouvert."
+    msg = f"Tocando {requete} no YouTube Music." if requete else "Abrindo YouTube Music."
+    return msg
+
+
+def youtube_lancer(requete: str = None) -> str:
+    if requete:
+        url = f"https://www.youtube.com/results?search_query={requests.utils.quote(requete)}"
+    else:
+        url = "https://www.youtube.com"
+    webbrowser.open(url)
+    msg = f"Procurando {requete} no YouTube." if requete else "Abrindo YouTube."
+    return msg
 
 
 # ═══════════════════════════════════════════════════════════════

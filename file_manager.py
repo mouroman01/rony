@@ -405,3 +405,140 @@ def fichiers_recents(pasta: Path = None, n: int = 10) -> list[Path]:
                       key=lambda p: p.stat().st_mtime, reverse=True)[:n]
     except Exception:
         return []
+
+
+# ═══════════════════════════════════════════════════════════════
+#  MAPEAMENTO COMPLETO DE PASTA
+# ═══════════════════════════════════════════════════════════════
+
+def mapear_pasta_completo(caminho: Path, lingua: str = "pt") -> dict:
+    """
+    Mapeia recursivamente uma pasta inteira e retorna estrutura completa.
+    Ideal para vaults Obsidian e pastas de projeto.
+    Retorna dict com: arvore, estatisticas, resumo_voz, lista_arquivos.
+    """
+    stats: dict[str, int] = {}
+    lista_arquivos: list[dict] = []
+    total_tamanho = 0
+    total_pastas = 0
+
+    def _varrer(pasta: Path, nivel: int = 0) -> list[dict]:
+        nonlocal total_tamanho, total_pastas
+        nos = []
+        try:
+            entradas = sorted(pasta.iterdir(), key=lambda x: (x.is_file(), x.name.lower()))
+        except PermissionError:
+            return nos
+        for e in entradas:
+            try:
+                if e.is_dir():
+                    total_pastas += 1
+                    filhos = _varrer(e, nivel + 1)
+                    nos.append({"nome": e.name, "tipo": "pasta", "nivel": nivel, "filhos": filhos})
+                elif e.is_file():
+                    st = e.stat()
+                    cat = categoria_arquivo(e)
+                    ext = e.suffix.lower()
+                    stats[cat] = stats.get(cat, 0) + 1
+                    total_tamanho += st.st_size
+                    info = {
+                        "nome": e.name,
+                        "tipo": "arquivo",
+                        "categoria": cat,
+                        "extensao": ext,
+                        "tamanho": st.st_size,
+                        "modificado": datetime.fromtimestamp(st.st_mtime).strftime("%d/%m/%Y"),
+                        "caminho": str(e),
+                        "nivel": nivel,
+                    }
+                    nos.append(info)
+                    lista_arquivos.append(info)
+            except (PermissionError, OSError):
+                continue
+        return nos
+
+    arvore = _varrer(caminho)
+    total_arquivos = len(lista_arquivos)
+    tamanho_fmt = formatar_tamanho(total_tamanho)
+
+    # Resumo falado
+    cats_str = ", ".join(f"{v} {k}(s)" for k, v in sorted(stats.items(), key=lambda x: -x[1]))
+    resumos = {
+        "pt": (
+            f"A pasta '{caminho.name}' tem {total_pastas} subpasta(s) e {total_arquivos} arquivo(s), "
+            f"ocupando {tamanho_fmt} no total."
+            + (f" Tipos: {cats_str}." if cats_str else "")
+        ),
+        "en": (
+            f"Folder '{caminho.name}' has {total_pastas} subfolder(s) and {total_arquivos} file(s), "
+            f"totaling {tamanho_fmt}."
+            + (f" Types: {cats_str}." if cats_str else "")
+        ),
+        "fr": (
+            f"Le dossier '{caminho.name}' contient {total_pastas} sous-dossier(s) et {total_arquivos} fichier(s), "
+            f"pour un total de {tamanho_fmt}."
+        ),
+    }
+
+    return {
+        "arvore": arvore,
+        "lista_arquivos": lista_arquivos,
+        "estatisticas": stats,
+        "total_arquivos": total_arquivos,
+        "total_pastas": total_pastas,
+        "tamanho_total": total_tamanho,
+        "tamanho_fmt": tamanho_fmt,
+        "resumo_voz": resumos.get(lingua, resumos["pt"]),
+        "caminho": str(caminho),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+#  ABERTURA DE QUALQUER ARQUIVO
+# ═══════════════════════════════════════════════════════════════
+
+def abrir_qualquer_arquivo(nome: str) -> str:
+    """
+    Tenta abrir qualquer arquivo por nome, caminho parcial ou extensão.
+    Busca em Desktop, Documentos, Downloads, pasta atual e caminho absoluto.
+    """
+    # 1. Caminho absoluto direto
+    p = Path(nome)
+    if p.is_absolute() and p.exists():
+        return abrir_arquivo(p)
+
+    # 2. Alias conhecido
+    resolvido = resoudre_chemin(nome)
+    if resolvido:
+        if resolvido.is_file():
+            return abrir_arquivo(resolvido)
+        if resolvido.is_dir():
+            return abrir_pasta(resolvido)
+
+    # 3. Busca por nome nas pastas mais comuns
+    bases = [
+        _pasta_atual,
+        Path.home() / "Desktop",
+        Path.home() / "Documents",
+        Path.home() / "Downloads",
+        Path.home(),
+    ]
+    for base in bases:
+        try:
+            for candidato in base.rglob(f"*{nome}*"):
+                if candidato.is_file():
+                    return abrir_arquivo(candidato)
+        except PermissionError:
+            continue
+
+    # 4. Busca com extensões comuns se não tem extensão
+    if "." not in nome:
+        extensoes = [".pdf", ".docx", ".xlsx", ".txt", ".md", ".pptx",
+                     ".mp4", ".mp3", ".jpg", ".png"]
+        for base in bases:
+            for ext in extensoes:
+                candidato = base / f"{nome}{ext}"
+                if candidato.exists():
+                    return abrir_arquivo(candidato)
+
+    return f"Não encontrei o arquivo '{nome}'. Verifique o nome ou me diga o caminho completo."

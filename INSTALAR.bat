@@ -138,6 +138,43 @@ if errorlevel 1 (
 echo.
 
 :: ════════════════════════════════════════════════════════════
+::  PASSO 3c — Permissao e configuracao do microfone
+:: ════════════════════════════════════════════════════════════
+echo  Configurando microfone automaticamente...
+
+"%VENV_PY%" -c "
+import json, os, pathlib, sys
+try:
+    import pyaudio
+    p = pyaudio.PyAudio()
+    candidatos = []
+    virtuais = ['mapper', 'mapeador', 'primario', 'primary', 'driver de captura']
+    for i in range(p.get_device_count()):
+        d = p.get_device_info_by_index(i)
+        if d['maxInputChannels'] > 0:
+            nome = d['name'].lower()
+            eh_virtual = any(v in nome for v in virtuais)
+            candidatos.append((i, d['name'], eh_virtual))
+    p.terminate()
+    reais = [(i, n) for i, n, v in candidatos if not v]
+    escolhido_idx, escolhido_nome = (reais[0] if reais else candidatos[0]) if candidatos else (None, 'desconhecido')
+    local = os.environ.get('LOCALAPPDATA') or str(pathlib.Path.home() / 'AppData' / 'Local')
+    cfg_path = pathlib.Path(local) / 'Rony' / 'data' / 'rony_config.json'
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    dados = json.loads(cfg_path.read_text(encoding='utf-8')) if cfg_path.exists() else {}
+    dados['mic_device_index'] = escolhido_idx
+    cfg_path.write_text(json.dumps(dados, indent=2, ensure_ascii=False), encoding='utf-8')
+    print(f'Microfone configurado: [{escolhido_idx}] {escolhido_nome}')
+except Exception as e:
+    print(f'Aviso: nao foi possivel configurar microfone automaticamente ({e})')
+" 2>nul
+
+:: Garante permissao de microfone no registro do Windows
+reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone" /v "Value" /t REG_SZ /d "Allow" /f >nul 2>&1
+echo  [OK] Permissao de microfone garantida.
+echo.
+
+:: ════════════════════════════════════════════════════════════
 ::  PASSO 4 — Frontend (Node.js + Vite)
 :: ════════════════════════════════════════════════════════════
 echo  [4/6] Configurando interface grafica...

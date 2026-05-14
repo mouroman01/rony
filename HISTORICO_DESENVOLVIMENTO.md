@@ -208,6 +208,47 @@ ANTHROPIC_API_KEY=sk-ant-...    # https://console.anthropic.com
 
 ---
 
+### 14. Reprodução de música por voz com busca (YouTube Music)
+**Sessão:** 14/05/2026  
+- `main.py`: bloco de música completamente reescrito
+  - Novos gatilhos PT: `"toca"`, `"reproduz"`, `"quero ouvir"`, `"me coloca"`, `"bota uma música"`, etc.
+  - Extração automática do nome da música/artista da frase de voz
+  - Remoção de sufixos: `"no youtube"`, `"no spotify"`, `"pelo youtube"`, etc.
+  - Filtra frases genéricas (`"uma música"`, `"algo"`) para não fazer buscas inúteis
+- `music_controller.py`: mensagens de resposta em português + nova função `youtube_lancer()` para YouTube regular
+
+### 15. Correção crítica: encerramento por voz não funcionava
+**Sessão:** 14/05/2026  
+Dois bugs corrigidos em `main.py`:
+1. `mots_arret` não tinha palavras em PT: adicionados `"encerrar"`, `"fechar"`, `"sair"`, `"pode sair"`, `"até logo"`, `"chega"`, `"desliga rony"`, `"para rony"`, etc.
+2. Após `parler(au_revoir)` o código fazia `return True` mas **nunca chamava `os._exit()`** — o processo continuava rodando. Corrigido com `os._exit(0)` após o TTS.
+
+### 16. Abertura de qualquer arquivo + mapeamento de pasta
+**Sessão:** 14/05/2026  
+- `file_manager.py`: nova função `abrir_qualquer_arquivo(nome)` — busca por caminho absoluto, alias, busca recursiva em pastas comuns, fallback por extensão
+- `file_manager.py`: nova função `mapear_pasta_completo(caminho)` — mapeia recursivamente toda uma pasta, retorna árvore, estatísticas por tipo, tamanho total e resumo falado
+- `main.py`: novos comandos `"mapeia [pasta]"`, `"o que tem em [pasta]"`, `"mapeie meu vault"`, `"lista tudo em [pasta]"`
+- Suporte a Obsidian: `OBSIDIAN_VAULT_PATH` no `.env` — diga `"mapeia meu vault"` para listar todas as notas
+
+### 17. Modo Realtime — escuta contínua sem wake word
+**Sessão:** 14/05/2026  
+- `main.py`: novo modo `_modo_realtime` — R.O.N.Y ouve continuamente sem precisar dizer "Rony"
+- Três modos de escuta: **Veille** (aguarda wake word) → **Actif** (45s após wake word) → **Realtime** (sempre ativo, sem timeout)
+- Gatilhos para ativar: `"iniciar realtime"`, `"modo realtime"`, `"escuta contínua"`, `"modo sempre ativo"` — funcionam mesmo em modo veille
+- Gatilhos para desativar: `"desativar realtime"`, `"parar realtime"`, `"modo wake word"`
+- `.env`: nova variável `INICIAR_EM_REALTIME=true` para iniciar sempre em realtime
+- WebSocket: evento `{"action": "realtime", "ativo": true/false}` enviado ao frontend
+
+### 18. Microfone pré-autorizado e auto-configurado
+**Sessão:** 14/05/2026  
+- `main.py`: nova função `_autodetectar_microfone()` — detecta o melhor mic disponível, ignora mappers/drivers virtuais, salva o índice no config automaticamente
+- `_charger_config_micro()` agora chama auto-detecção se `mic_device_index` for null
+- `INSTALAR.bat`: passo 3c adicionado — detecta e salva o microfone silenciosamente durante a instalação + garante permissão via `reg add`
+- `rony_config.json` (AppData): `mic_device_index` definido para `1` (Logi C270 HD WebCam)
+- Permissão Windows: `HKCU\...\ConsentStore\microphone → Allow` (confirmado e garantido no instalador)
+
+---
+
 ## 🐛 Problemas conhecidos e soluções
 
 | Problema | Causa | Solução |
@@ -220,17 +261,20 @@ ANTHROPIC_API_KEY=sk-ant-...    # https://console.anthropic.com
 | GERAR_INSTALADOR.bat falhava com (x86) | `for` loop parseava `)` como fechamento | Resolvido — paths pré-extraídos |
 | Setup.iss erro linha 48 | app.ico não existe | Resolvido — linha removida |
 | Setup.iss erro linha 93 | DestName com wildcard inválido | Resolvido — wildcard removido |
+| "toca música" não abre nada / abre sem busca | Gatilhos de música incompletos, sem extração de query | Resolvido — sessão 14/05/2026 |
+| "encerrar" / "fechar" não encerra o Rony | Palavra ausente em `mots_arret` + falta de `os._exit()` | Resolvido — sessão 14/05/2026 |
+| Microfone não inicializa / pede permissão | `mic_device_index` null + sem consent store | Resolvido — auto-detecção + reg garantido |
 
 ---
 
 ## 🚀 Próximos passos
 
 - [ ] **Configurar chave Groq no `.env`** — necessário para voz + respostas IA (gratuito)
-- [ ] Testar reconhecimento de voz com Whisper após configurar Groq
 - [ ] Criar `app.ico` personalizado e reativar `SetupIconFile` no Setup.iss
 - [ ] Gerar `Rony_Setup_1.0.0.exe` com sucesso e publicar no GitHub Releases
 - [ ] Preencher `download_url` no `update_manifest.json` após publicar release
 - [ ] Testar instalador completo em máquina limpa (sem Python pré-instalado)
+- [ ] Configurar `OBSIDIAN_VAULT_PATH` no `.env` para integração com vault
 
 ---
 
@@ -243,4 +287,7 @@ venv\Scripts\python.exe _check_mic.py
 :: Ver logs em tempo real ao iniciar
 INICIAR_RONY.bat
 :: Observar o terminal — erros aparecem com prefixo [MICRO], [GEMINI], [GROQ] etc.
+
+:: Ativar modo realtime ao iniciar (editar .env):
+:: INICIAR_EM_REALTIME=true
 ```

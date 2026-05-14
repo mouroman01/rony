@@ -99,6 +99,7 @@ from file_manager import (
     abrir_arquivo, abrir_pasta, ler_arquivo_texto,
     pesquisar_e_falar, pesquisar_arquivos, resumo_pasta_voz,
     listar_arquivos_recentes, info_arquivo_voz, ALIAS_DOSSIERS,
+    mapear_pasta_completo, abrir_qualquer_arquivo,
 )
 from music_controller import lancer_musique, radio_lancer, radio_arreter, definir_service
 from ha_config import (
@@ -158,6 +159,7 @@ historique_ia  = []    # Contexte Gemini actuel
 
 # ── Wake word — modo de espera / ativo ───────────────────────
 _modo_ativo          = False   # False = veille, True = actif
+_modo_realtime       = False   # True = escuta contínua sem wake word
 _ts_ultimo_comando   = 0.0    # timestamp do último comando recebido
 TIMEOUT_INATIVIDADE  = 45.0   # segundos sem comando → volta ao modo veille
 
@@ -531,16 +533,59 @@ builtins.parler = parler
 #  RECONNAISSANCE VOCALE
 # ═══════════════════════════════════════════════════════════════
 
-def _charger_config_micro() -> int:
-    # Lê da AppData primeiro (config migrada), fallback para pasta do programa
+def _charger_config_micro() -> int | None:
+    # Lê da AppData primeiro, fallback para pasta do programa
     for config_path in [_CONFIG_FILE, RONY_DIR / "rony_config.json"]:
         try:
             if config_path.exists():
                 data = json.loads(config_path.read_text(encoding="utf-8"))
-                return data.get("mic_device_index", None)
+                idx = data.get("mic_device_index", None)
+                if idx is not None:
+                    return idx
         except Exception:
             pass
-    return None
+    # Sem índice salvo: detecta automaticamente e salva
+    return _autodetectar_microfone()
+
+
+def _autodetectar_microfone() -> int | None:
+    """
+    Detecta o melhor microfone disponível e salva no config.
+    Preferência: primeiro mic real (não mapper/driver virtual).
+    """
+    if pyaudio is None:
+        return None
+    try:
+        p = pyaudio.PyAudio()
+        candidatos = []
+        virtuais = {"mapper", "primário", "primary", "mapeador", "driver de captura"}
+        for i in range(p.get_device_count()):
+            d = p.get_device_info_by_index(i)
+            if d["maxInputChannels"] > 0:
+                nome_lower = d["name"].lower()
+                eh_virtual = any(v in nome_lower for v in virtuais)
+                candidatos.append((i, d["name"], eh_virtual))
+        p.terminate()
+
+        # Prefere mic real; fallback para qualquer um
+        reais = [(i, n) for i, n, v in candidatos if not v]
+        escolhido = reais[0][0] if reais else (candidatos[0][0] if candidatos else None)
+
+        if escolhido is not None:
+            # Salva para não detectar de novo na próxima vez
+            try:
+                data = json.loads(_CONFIG_FILE.read_text(encoding="utf-8")) if _CONFIG_FILE.exists() else {}
+                data["mic_device_index"] = escolhido
+                _CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+                _CONFIG_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+            except Exception:
+                pass
+            print(f"[MICRO] Auto-configurado: índice {escolhido} — {reais[0][1] if reais else candidatos[0][1]}")
+
+        return escolhido
+    except Exception as e:
+        print(f"[MICRO] Erro na auto-detecção: {e}")
+        return None
 
 
 def _transcrever_audio(audio: sr.AudioData, lang_code: str) -> str:
@@ -798,10 +843,32 @@ async def traiter_commande_systeme(texte: str) -> bool:
         return True
 
     # ── Arrêt / sortie ────────────────────────────────────────
-    mots_arret = {"au revoir", "goodbye", "tchau", "adios", "auf wiedersehen",
-                  "ciao", "arret", "arrête", "stop rony", "quitter"}
+    mots_arret = {
+        "au revoir", "goodbye", "tchau", "adios", "auf wiedersehen",
+        "ciao", "arret", "arrête", "stop rony", "quitter",
+        # PT — encerrar
+        "encerrar", "encerra", "encerre", "pode encerrar",
+        "fechar", "fecha", "feche", "pode fechar",
+        "desligar", "desliga", "pode desligar",
+        "sair", "pode sair", "vai embora", "pode ir",
+        "até logo", "até mais", "boa noite rony", "boa tarde rony",
+        "para rony", "para o rony", "chega", "obrigado pode sair",
+        # EN extra
+        "shut down rony", "close rony", "exit rony", "bye rony",
+        # ES
+        "cierra rony", "adiós rony", "sal rony",
+    }
     if any(m in t for m in mots_arret):
         await parler(get_reponse("au_revoir"))
+        await asyncio.sleep(0.5)
+        os._exit(0)
+
+    # ── Modo Realtime ─────────────────────────────────────────
+    if any(m in t for m in _TRIGGERS_REALTIME_ON):
+        await _ativar_modo_realtime()
+        return True
+    if any(m in t for m in _TRIGGERS_REALTIME_OFF):
+        await _desativar_modo_realtime()
         return True
 
     # ── Météo ─────────────────────────────────────────────────
@@ -847,24 +914,58 @@ async def traiter_commande_systeme(texte: str) -> bool:
                 return True
 
     # ── Musique ───────────────────────────────────────────────
-    mots_musique = {"musique", "music", "música", "musik", "musica",
-                    "spotify", "deezer", "youtube music"}
-    mots_radio   = {"radio"}
+    mots_tocar = {
+        "toca", "tocar", "reproduz", "reproduzir", "quero ouvir", "quero escutar",
+        "me coloca", "me toca", "coloca música", "coloca musica",
+        "coloca uma música", "coloca uma musica", "bota uma música", "bota uma musica",
+        "play music", "play song", "joue de la musique",
+        "musique", "music", "música", "musik", "musica",
+        "spotify", "deezer", "youtube music",
+    }
+    mots_radio = {"radio"}
     if any(m in t for m in mots_radio):
-        # Extraire le nom de la radio
         for prep in ["radio ", "rádio "]:
             if prep in t:
                 nom = t.split(prep, 1)[-1].strip()
                 resultat = radio_lancer(nom)
                 await parler(resultat)
                 return True
-    if any(m in t for m in mots_musique):
+    if any(m in t for m in mots_tocar):
         service = None
-        for svc in ["spotify", "deezer", "youtube"]:
+        for svc in ["spotify", "deezer", "youtube music", "youtube"]:
             if svc in t:
-                service = svc
+                service = "youtube" if "youtube" in svc else svc
                 break
-        resultat = lancer_musique(service=service)
+
+        # Extrai o nome da música/artista da frase
+        _prefixos_musica = [
+            "toca ", "tocar ", "reproduz ", "reproduzir ",
+            "quero ouvir ", "quero escutar ",
+            "me coloca ", "me toca ",
+            "coloca uma música ", "coloca uma musica ",
+            "coloca música ", "coloca musica ",
+            "bota uma música ", "bota uma musica ",
+            "play music ", "play song ", "play ",
+            "joue de la musique ", "joue ",
+            "youtube music ", "spotify ", "deezer ",
+            "música ", "musica ", "music ", "musique ",
+        ]
+        _genericas = {
+            "uma música", "uma musica", "alguma música", "alguma musica",
+            "algo", "something", "quelque chose", "eine musik",
+            "música", "musica", "music", "musique",
+        }
+        texto_q = t
+        for prep in _prefixos_musica:
+            if prep in texto_q:
+                texto_q = texto_q.split(prep, 1)[-1].strip()
+                break
+        for sufixo in ["no youtube music", "no youtube", "no spotify", "no deezer",
+                       "em youtube music", "em youtube", "pelo youtube", "pelo spotify"]:
+            texto_q = texto_q.replace(sufixo, "").strip()
+        query = texto_q if len(texto_q) > 2 and texto_q not in _genericas else None
+
+        resultat = lancer_musique(requete=query, service=service)
         await parler(resultat)
         return True
 
@@ -915,29 +1016,53 @@ async def traiter_commande_systeme(texte: str) -> bool:
             await parler(f"Nao consegui abrir a camera: {e}")
         return True
 
+    # ── Mapeamento completo de pasta / vault ─────────────────
+    mots_mapear = {
+        "mapeia", "mapeie", "mapeiar", "mapear", "lista tudo",
+        "o que tem em", "o que há em", "mostra tudo",
+        "escaneia", "escaneie", "analisa pasta", "analisa a pasta",
+        "vault", "obsidian", "meu vault",
+    }
+    if any(m in t for m in mots_mapear):
+        alvo_str = ""
+        for prep in ["mapeia ", "mapeie ", "mapear ", "lista tudo em ", "o que tem em ",
+                     "o que há em ", "mostra tudo em ", "escaneia ", "escaneie ",
+                     "analisa pasta ", "analisa a pasta "]:
+            if prep in t:
+                alvo_str = t.split(prep, 1)[-1].strip().strip('"').strip("'")
+                break
+        if not alvo_str and ("vault" in t or "obsidian" in t):
+            vault_env = os.getenv("OBSIDIAN_VAULT_PATH", "")
+            alvo_str = vault_env if vault_env else str(Path.home() / "Documents" / "Obsidian")
+        caminho_mapa = resoudre_chemin(alvo_str) if alvo_str else None
+        if caminho_mapa and caminho_mapa.is_dir():
+            resultado_mapa = mapear_pasta_completo(caminho_mapa, lingua=langue)
+            await parler(resultado_mapa["resumo_voz"])
+        else:
+            await parler("Não encontrei essa pasta. Qual é o caminho completo?")
+        return True
+
+    # ── Abertura de arquivos (qualquer tipo) ─────────────────
     mots_abrir_arquivo = {
         "abre arquivo", "abre o arquivo", "abrir arquivo", "abrir o arquivo",
-        "abre arquivos", "abrir arquivos",
         "abra arquivo", "abra o arquivo", "open file", "open the file",
+        "abre o pdf", "abre o doc", "abre o excel", "abre a planilha",
+        "abre o video", "abre a imagem", "abre a foto",
     }
     if any(m in t for m in mots_abrir_arquivo):
         nome_arq = ""
         for prep in [
             "abre o arquivo ", "abre arquivo ", "abrir o arquivo ", "abrir arquivo ",
             "abra o arquivo ", "abra arquivo ", "open the file ", "open file ",
+            "abre o pdf ", "abre o doc ", "abre o excel ", "abre a planilha ",
+            "abre o video ", "abre a imagem ", "abre a foto ",
         ]:
             if prep in t:
                 nome_arq = t.split(prep, 1)[-1].strip().strip('"').strip("'")
                 break
         if nome_arq:
-            caminho = resoudre_chemin(nome_arq)
-            if not caminho:
-                resultados = pesquisar_arquivos(nome_arq)
-                caminho = resultados[0] if resultados else None
-            if caminho and caminho.is_file():
-                await parler(abrir_arquivo(caminho))
-            else:
-                await parler(f"Nao encontrei o arquivo {nome_arq}.")
+            resultado_arq = abrir_qualquer_arquivo(nome_arq)
+            await parler(resultado_arq)
         else:
             await parler("Qual arquivo voce quer abrir?")
         return True
@@ -1762,13 +1887,21 @@ async def ecouter_wake_word() -> str | None:
 
 async def boucle_ecoute() -> None:
     """
-    Boucle principale — deux phases :
-      VEILLE : écoute légère, attend le wake word ("Rony", "hey Rony"...)
-      ACTIF  : écoute pleine, traite les commandes jusqu'au timeout
+    Boucle principale — três modos:
+      VEILLE   : écoute légère, attend le wake word ("Rony", "hey Rony"...)
+      ACTIF    : écoute pleine, traite les commandes jusqu'au timeout
+      REALTIME : écoute contínua sem wake word, sem timeout
     """
-    global _modo_ativo, _ts_ultimo_comando
+    global _modo_ativo, _ts_ultimo_comando, _modo_realtime
 
-    print("[RONY] 💤 En veille — dites 'Rony' ou 'Hey Rony' pour activer.")
+    # Inicia em realtime se configurado no .env
+    if os.getenv("INICIAR_EM_REALTIME", "false").lower() == "true":
+        _modo_realtime = True
+        _modo_ativo    = True
+        _ts_ultimo_comando = time.time()
+        print("[RONY] 🎙️ MODO REALTIME ATIVO — ouvindo continuamente.")
+    else:
+        print("[RONY] 💤 En veille — dites 'Rony' ou 'Hey Rony' pour activer.")
 
     while True:
         try:
@@ -1776,21 +1909,35 @@ async def boucle_ecoute() -> None:
                 await asyncio.sleep(0.3)
                 continue
 
+            # ── MODO REALTIME: escuta contínua, sem wake word ──
+            if _modo_realtime:
+                _modo_ativo = True
+                texte = await ecouter()
+                if not texte:
+                    continue
+                _ts_ultimo_comando = time.time()
+                commande = nettoyer_commande(texte)
+                await traiter_message(commande)
+                continue
+
             # ── MODE VEILLE : chercher le wake word ───────────
             if not _modo_ativo:
                 texte = await ecouter_wake_word()
                 if texte:
                     print(f"[VEILLE] Entendu : '{texte}'")
+                    # Permite ativar realtime mesmo em veille
+                    t_veille = texte.lower().strip()
+                    if any(kw in t_veille for kw in _TRIGGERS_REALTIME_ON):
+                        await _ativar_modo_realtime()
+                        continue
                     if contient_wake_word(texte):
                         await ativar_rony()
-                        # Si la commande est directement après le wake word
                         commande = nettoyer_commande(texte)
                         if commande and len(commande.split()) >= 2:
                             await traiter_message(commande)
                 continue
 
             # ── MODE ACTIF : traiter les commandes ────────────
-            # Timeout d'inactivité → retour en veille
             if time.time() - _ts_ultimo_comando > TIMEOUT_INATIVIDADE:
                 msgs = {
                     "fr": "Je repasse en veille. Appelez-moi quand vous avez besoin.",
@@ -1807,7 +1954,6 @@ async def boucle_ecoute() -> None:
             if not texte:
                 continue
 
-            # Verificar palavra de parada
             if contient_mot_arret(texte):
                 msgs = {
                     "fr": "D'accord, je repasse en veille.",
@@ -1820,16 +1966,60 @@ async def boucle_ecoute() -> None:
                 await desativar_rony()
                 continue
 
-            # Reiniciar timer de inatividade
             _ts_ultimo_comando = time.time()
-
-            # Tratar commande (retira o wake word se repetido)
             commande = nettoyer_commande(texte)
             await traiter_message(commande)
 
         except Exception as e:
             print(f"[ÉCOUTE] Erreur : {e}")
             await asyncio.sleep(1)
+
+
+# ── Triggers realtime (usados na boucle e no traiter_commande) ─
+_TRIGGERS_REALTIME_ON = {
+    "iniciar realtime", "modo realtime", "ativar realtime", "ativa realtime",
+    "ligar realtime", "realtime", "escuta contínua", "escuta continua",
+    "modo sempre ativo", "sempre ouvindo", "ouvir sempre",
+    "start realtime", "enable realtime",
+}
+_TRIGGERS_REALTIME_OFF = {
+    "desativar realtime", "desativa realtime", "parar realtime", "para realtime",
+    "desligar realtime", "modo wake word", "modo normal de escuta",
+    "voltar modo normal", "stop realtime", "disable realtime",
+}
+
+
+async def _ativar_modo_realtime() -> None:
+    global _modo_realtime, _modo_ativo, _ts_ultimo_comando
+    _modo_realtime     = True
+    _modo_ativo        = True
+    _ts_ultimo_comando = time.time()
+    print("[RONY] 🎙️ MODO REALTIME ATIVO — ouvindo continuamente.")
+    await send_web_state("listening")
+    if CONNECTED_CLIENTS:
+        msg = json.dumps({"action": "realtime", "ativo": True})
+        await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
+    msgs = {
+        "pt": "Modo realtime ativado. Estou ouvindo continuamente, sem precisar me chamar.",
+        "en": "Realtime mode on. I'm always listening now — no wake word needed.",
+        "fr": "Mode temps réel activé. J'écoute en continu, sans mot de réveil.",
+        "es": "Modo tiempo real activado. Estoy escuchando continuamente.",
+    }
+    await parler(msgs.get(get_langue(), msgs["pt"]))
+
+
+async def _desativar_modo_realtime() -> None:
+    global _modo_realtime
+    _modo_realtime = False
+    await desativar_rony()
+    print("[RONY] 💤 MODO REALTIME DESATIVADO — voltando ao wake word.")
+    msgs = {
+        "pt": "Modo realtime desativado. Me chame com 'Rony' quando precisar.",
+        "en": "Realtime mode off. Say 'Rony' to wake me up.",
+        "fr": "Mode temps réel désactivé. Dites 'Rony' pour m'activer.",
+        "es": "Modo tiempo real desactivado. Di 'Rony' para activarme.",
+    }
+    await parler(msgs.get(get_langue(), msgs["pt"]))
 
 
 # ═══════════════════════════════════════════════════════════════
