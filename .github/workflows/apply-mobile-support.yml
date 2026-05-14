@@ -1,0 +1,119 @@
+name: Apply mobile access support
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-mobile-support.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-mobile-support:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch sources
+        shell: pwsh
+        run: |
+          $script = @'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"Missing marker: {label}")
+              return text.replace(old, new, 1)
+
+          main = Path("main.py")
+          text = main.read_text(encoding="utf-8")
+          if "import socket" not in text.split("from pathlib import Path", 1)[0]:
+              text = replace_once(text, "import http.server\n", "import http.server\nimport socket\n", "socket import")
+          text = text.replace('    import socket\n    inicio = time.time()\n', '    inicio = time.time()\n')
+
+          helper = '''\n\ndef _obter_ip_local() -> str:\n    """Retorna o IP da rede local usado pelo celular para acessar o Rony."""\n    try:\n        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:\n            sock.connect(("8.8.8.8", 80))\n            ip = sock.getsockname()[0]\n            if ip and not ip.startswith("127."):\n                return ip\n    except Exception:\n        pass\n\n    try:\n        return socket.gethostbyname(socket.gethostname())\n    except Exception:\n        return "localhost"\n\n\ndef _liberar_firewall_windows(portas: list[int]) -> None:\n    """Tenta liberar as portas do Rony no Firewall do Windows."""\n    if os.name != "nt":\n        return\n\n    for porta in portas:\n        nome = f"Rony acesso local porta {porta}"\n        try:\n            subprocess.run(\n                [\n                    "netsh", "advfirewall", "firewall", "add", "rule",\n                    f"name={nome}",\n                    "dir=in",\n                    "action=allow",\n                    "protocol=TCP",\n                    f"localport={porta}",\n                ],\n                capture_output=True,\n                text=True,\n                timeout=8,\n                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),\n            )\n        except Exception as exc:\n            print(f"[REDE] Nao foi possivel liberar a porta {porta} no firewall: {exc}")\n'''
+          if "def _obter_ip_local()" not in text:
+              text = replace_once(text, "\ndef _iniciar_servidor_frontend() -> bool:\n", helper + "\ndef _iniciar_servidor_frontend() -> bool:\n", "mobile helpers")
+          if "ip_local = _obter_ip_local()" not in text:
+              text = replace_once(text, '    porta    = config.get("frontend_port", 5173)\n', '    porta    = config.get("frontend_port", 5173)\n    ip_local = _obter_ip_local()\n', "local ip")
+          mobile_api = '''            if path == "/api/mobile-info":\n                self._send_json(200, {\n                    "host": ip_local,\n                    "frontend_port": porta,\n                    "ws_port": WS_PORT,\n                    "url": f"http://{ip_local}:{porta}",\n                })\n                return\n\n'''
+          if 'path == "/api/mobile-info"' not in text:
+              text = replace_once(text, '            path = urllib.parse.urlparse(self.path).path\n', '            path = urllib.parse.urlparse(self.path).path\n' + mobile_api, "mobile api")
+          text = text.replace('http.server.HTTPServer((LAN_HOST, porta), _Handler)', 'http.server.ThreadingHTTPServer((LAN_HOST, porta), _Handler)')
+          old_print = '    print(f"[UI] Servidor frontend iniciado em http://localhost:{porta} e na rede local pela porta {porta}")\n'
+          new_print = '    print(f"[UI] Servidor frontend iniciado em http://localhost:{porta}")\n    print(f"[UI] Acesso pelo celular na mesma rede: http://{ip_local}:{porta}")\n'
+          if old_print in text:
+              text = text.replace(old_print, new_print, 1)
+          if "_liberar_firewall_windows([porta_fe, WS_PORT])" not in text:
+              text = replace_once(text, '    porta_fe = config_cfg.get("frontend_port", 5173)\n', '    porta_fe = config_cfg.get("frontend_port", 5173)\n    _liberar_firewall_windows([porta_fe, WS_PORT])\n', "firewall call")
+          main.write_text(text, encoding="utf-8")
+
+          index = Path("frontend/index.html")
+          text = index.read_text(encoding="utf-8")
+          if 'id="mobile-button"' not in text:
+              text = replace_once(text, '    <button id="realtime-button" class="ctrl-btn" title="Realtime voice">realtime</button>\n', '    <button id="realtime-button" class="ctrl-btn" title="Realtime voice">realtime</button>\n    <button id="mobile-button"   class="ctrl-btn" title="Acesso pelo celular">celular</button>\n', "mobile button")
+          modal = '''\n  <!-- Acesso pelo celular -->\n  <div id="mobile-modal" class="mobile-modal hidden">\n    <div class="mobile-modal-inner">\n      <h3>Acesso pelo celular</h3>\n      <p>Conecte o celular na mesma rede Wi-Fi e abra:</p>\n      <button id="mobile-url" class="mobile-url" type="button">carregando...</button>\n      <p id="mobile-hint" class="mobile-hint"></p>\n      <button id="mobile-close" class="ctrl-btn">✕</button>\n    </div>\n  </div>\n'''
+          if 'id="mobile-modal"' not in text:
+              text = replace_once(text, '\n  <script type="module" src="/src/main.ts"></script>\n', modal + '\n  <script type="module" src="/src/main.ts"></script>\n', "mobile modal")
+          index.write_text(text, encoding="utf-8")
+
+          ts = Path("frontend/src/main.ts")
+          text = ts.read_text(encoding="utf-8")
+          if "const mobileBtn" not in text:
+              text = replace_once(text, 'const captureBtn      = document.getElementById("capture-button")    as HTMLButtonElement;\n', 'const captureBtn      = document.getElementById("capture-button")    as HTMLButtonElement;\nconst mobileBtn       = document.getElementById("mobile-button")     as HTMLButtonElement;\n', "mobile dom button")
+          if "const mobileModal" not in text:
+              text = replace_once(text, 'const realtimeBtn     = document.getElementById("realtime-button")   as HTMLButtonElement;\n', 'const realtimeBtn     = document.getElementById("realtime-button")   as HTMLButtonElement;\nconst mobileModal     = document.getElementById("mobile-modal")      as HTMLDivElement;\nconst mobileClose     = document.getElementById("mobile-close")      as HTMLButtonElement;\nconst mobileUrlBtn    = document.getElementById("mobile-url")        as HTMLButtonElement;\nconst mobileHint      = document.getElementById("mobile-hint")       as HTMLParagraphElement;\n', "mobile dom modal")
+          if "let showMobileModal" not in text:
+              text = replace_once(text, 'let showLangModal = false;\n', 'let showLangModal = false;\nlet showMobileModal = false;\n', "mobile state")
+          mobile_fn = '''\nasync function toggleMobileModal(show?: boolean): Promise<void> {\n  showMobileModal = show ?? !showMobileModal;\n  mobileModal.classList.toggle("hidden", !showMobileModal);\n  if (!showMobileModal) return;\n\n  mobileUrlBtn.textContent = "carregando...";\n  mobileHint.textContent = "";\n  try {\n    const response = await fetch("/api/mobile-info");\n    const data = await response.json();\n    const url = String(data.url || `${window.location.protocol}//${window.location.host}`);\n    mobileUrlBtn.textContent = url;\n    mobileHint.textContent = "Toque no endereco para copiar.";\n  } catch (_) {\n    mobileUrlBtn.textContent = `${window.location.protocol}//${window.location.host}`;\n    mobileHint.textContent = "Se nao abrir no celular, permita o Rony no Firewall do Windows.";\n  }\n}\n'''
+          if "function toggleMobileModal" not in text:
+              text = replace_once(text, '\nfunction toggleKeyboard(show?: boolean): void {\n', mobile_fn + '\nfunction toggleKeyboard(show?: boolean): void {\n', "mobile function")
+          if "mobileBtn.onclick" not in text:
+              text = replace_once(text, 'langClose.onclick      = () => toggleLangModal(false);\n', 'langClose.onclick      = () => toggleLangModal(false);\nmobileBtn.onclick      = () => { void toggleMobileModal(); };\nmobileClose.onclick    = () => { void toggleMobileModal(false); };\nmobileUrlBtn.onclick   = () => {\n  const url = mobileUrlBtn.textContent || "";\n  if (url.startsWith("http")) {\n    navigator.clipboard?.writeText(url);\n    mobileHint.textContent = "Endereco copiado.";\n  }\n};\n', "mobile events")
+          if "showMobileModal" in text and "!mobileModal.contains" not in text:
+              text = replace_once(text, '  if (showLangModal && !langModal.contains(e.target as Node) && !langBadge.contains(e.target as Node)) {\n    toggleLangModal(false);\n  }\n', '  if (showLangModal && !langModal.contains(e.target as Node) && !langBadge.contains(e.target as Node)) {\n    toggleLangModal(false);\n  }\n  if (showMobileModal && !mobileModal.contains(e.target as Node) && !mobileBtn.contains(e.target as Node)) {\n    void toggleMobileModal(false);\n  }\n', "mobile outside click")
+          if "void toggleMobileModal(false);" not in text.split('if (e.key === "Escape")', 1)[1].split('}', 1)[0]:
+              text = replace_once(text, '    toggleLangModal(false);\n    toggleKeyboard(false);\n', '    toggleLangModal(false);\n    void toggleMobileModal(false);\n    toggleKeyboard(false);\n', "mobile escape")
+          if 'mobileModal.classList.add("hidden");' not in text:
+              text = replace_once(text, 'langModal.classList.add("hidden");\n', 'langModal.classList.add("hidden");\nmobileModal.classList.add("hidden");\n', "mobile boot")
+          ts.write_text(text, encoding="utf-8")
+
+          css = Path("frontend/src/style.css")
+          text = css.read_text(encoding="utf-8")
+          if ".mobile-modal" not in text:
+              block = '''\n/* Acesso pelo celular */\n.mobile-modal {\n  position: fixed;\n  inset: 0;\n  background: rgba(0,0,0,0.55);\n  backdrop-filter: blur(8px);\n  z-index: 300;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  transition: opacity 0.3s;\n}\n.mobile-modal.hidden { opacity: 0; pointer-events: none; }\n\n.mobile-modal-inner {\n  background: rgba(5,5,20,0.95);\n  border: 1px solid var(--clr-border);\n  border-radius: 14px;\n  padding: 28px 32px;\n  max-width: 460px;\n  width: 90vw;\n  position: relative;\n}\n.mobile-modal-inner h3 {\n  font-size: 15px;\n  font-weight: 700;\n  letter-spacing: 0.08em;\n  text-transform: uppercase;\n  color: var(--clr-primary);\n  margin-bottom: 14px;\n}\n.mobile-modal-inner p {\n  color: var(--clr-muted);\n  font-size: 13px;\n  line-height: 1.5;\n}\n.mobile-url {\n  width: 100%;\n  margin: 16px 0 10px;\n  padding: 13px 14px;\n  border: 1px solid rgba(6,182,212,0.45);\n  border-radius: 8px;\n  background: rgba(6,182,212,0.12);\n  color: var(--clr-text);\n  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;\n  font-size: 14px;\n  cursor: pointer;\n  overflow-wrap: anywhere;\n}\n.mobile-hint { min-height: 20px; }\n.mobile-modal-inner .ctrl-btn {\n  position: absolute;\n  top: 14px; right: 14px;\n  padding: 6px 10px;\n}\n'''
+              text = replace_once(text, '\n/* ── Scrollbar', block + '\n/* ── Scrollbar', "mobile css")
+          if "#controls" not in text.split("@media (max-width: 480px)", 1)[1]:
+              text = replace_once(text, '  .badge       { font-size: 10px; padding: 5px 9px; }\n', '  .badge       { font-size: 10px; padding: 5px 9px; }\n  #controls    { width: min(360px, 94vw); flex-wrap: wrap; justify-content: center; bottom: 18px; gap: 8px; }\n', "mobile responsive controls")
+          css.write_text(text, encoding="utf-8")
+          '@
+          Set-Content -LiteralPath _apply_mobile_support.py -Value $script -Encoding UTF8
+          python _apply_mobile_support.py
+
+      - name: Build frontend
+        shell: pwsh
+        working-directory: frontend
+        run: |
+          npm.cmd ci
+          npm.cmd run build
+
+      - name: Commit changes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py frontend/index.html frontend/src/main.ts frontend/src/style.css frontend/dist
+          git status --short
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "feat: add mobile access support"
+            git push
+          } else {
+            Write-Host "No source changes to commit."
+          }
