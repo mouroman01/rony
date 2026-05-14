@@ -133,6 +133,8 @@ import rony_updater
 # ── Clés API ─────────────────────────────────────────────────
 GEMINI_KEY    = os.getenv("GEMINI_API_KEY", "")
 OPENAI_KEY    = os.getenv("OPENAI_API_KEY", "")
+OPENAI_REALTIME_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
+OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "alloy")
 GROQ_KEY      = os.getenv("GROQ_API_KEY", "")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GROK_KEY      = os.getenv("XAI_API_KEY", "")
@@ -1854,6 +1856,56 @@ def _iniciar_servidor_frontend() -> bool:
     class _Handler(http.server.SimpleHTTPRequestHandler):
         def log_message(self, *args):
             pass  # silencia logs do servidor HTTP
+
+        def _send_json(self, status: int, payload: dict):
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def do_GET(self):
+            import urllib.parse
+            path = urllib.parse.urlparse(self.path).path
+            if path == "/api/realtime-token":
+                if not OPENAI_KEY or OPENAI_KEY.startswith("VOTRE_"):
+                    self._send_json(400, {"error": "OPENAI_API_KEY nao configurada no .env."})
+                    return
+
+                payload = {
+                    "expires_after": {"anchor": "created_at", "seconds": 600},
+                    "session": {
+                        "type": "realtime",
+                        "model": OPENAI_REALTIME_MODEL,
+                        "instructions": (
+                            "Voce e R.O.N.Y, um assistente pessoal de voz. "
+                            "Responda em portugues do Brasil por padrao, de forma curta, natural e util."
+                        ),
+                        "audio": {"output": {"voice": OPENAI_REALTIME_VOICE}},
+                    },
+                }
+                try:
+                    resp = requests.post(
+                        "https://api.openai.com/v1/realtime/client_secrets",
+                        headers={
+                            "Authorization": f"Bearer {OPENAI_KEY}",
+                            "Content-Type": "application/json",
+                        },
+                        json=payload,
+                        timeout=20,
+                    )
+                    data = resp.json()
+                    if not resp.ok:
+                        self._send_json(resp.status_code, {"error": data.get("error", {}).get("message", "Falha ao criar sessao realtime.")})
+                        return
+                    data["model"] = OPENAI_REALTIME_MODEL
+                    self._send_json(200, data)
+                except Exception as exc:
+                    self._send_json(500, {"error": f"Falha ao criar token realtime: {exc}"})
+                return
+
+            return super().do_GET()
 
         def translate_path(self, path):
             # Serve todos os arquivos a partir do dist_dir

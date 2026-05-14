@@ -34,6 +34,7 @@ const helpCommandsEl  = document.getElementById("help-commands")     as HTMLDivE
 const langModal       = document.getElementById("lang-modal")        as HTMLDivElement;
 const langClose       = document.getElementById("lang-close")        as HTMLButtonElement;
 const langList        = document.getElementById("lang-list")         as HTMLDivElement;
+const realtimeBtn     = document.getElementById("realtime-button")   as HTMLButtonElement;
 
 // ── Badge Modo Especialista ───────────────────────────────────
 let specialistBadge: HTMLDivElement | null = null;
@@ -124,6 +125,11 @@ let showKeyboard = false;
 let showHelp     = false;
 let showLangModal = false;
 let availableLangs: string[] = [];
+let realtimePc: RTCPeerConnection | null = null;
+let realtimeDc: RTCDataChannel | null = null;
+let realtimeStream: MediaStream | null = null;
+let realtimeAudio: HTMLAudioElement | null = null;
+let realtimeActive = false;
 
 // ── Orbe 3D ───────────────────────────────────────────────────
 const orb = createOrb(canvas);
@@ -317,6 +323,108 @@ function toggleKeyboard(show?: boolean): void {
 }
 
 // ── Événements boutons ────────────────────────────────────────
+function setRealtimeActive(active: boolean): void {
+  realtimeActive = active;
+  realtimeBtn.classList.toggle("is-realtime", active);
+  realtimeBtn.textContent = active ? "stop" : "realtime";
+}
+
+async function startRealtime(): Promise<void> {
+  if (realtimeActive) {
+    stopRealtime();
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    errorEl.textContent = "Microfone realtime exige navegador seguro";
+    return;
+  }
+
+  try {
+    errorEl.textContent = "";
+    applyState("thinking");
+
+    const tokenResponse = await fetch("/api/realtime-token");
+    const tokenData = await tokenResponse.json();
+    if (!tokenResponse.ok) {
+      throw new Error(tokenData.error || "Nao consegui criar sessao realtime.");
+    }
+    const clientSecret = tokenData.value || tokenData.client_secret?.value;
+    if (!clientSecret) throw new Error("Token realtime ausente.");
+
+    const pc = new RTCPeerConnection();
+    realtimePc = pc;
+
+    realtimeAudio = document.createElement("audio");
+    realtimeAudio.autoplay = true;
+    realtimeAudio.style.display = "none";
+    document.body.appendChild(realtimeAudio);
+
+    pc.ontrack = (event) => {
+      if (realtimeAudio) realtimeAudio.srcObject = event.streams[0];
+      applyState("speaking");
+    };
+
+    realtimeStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    pc.addTrack(realtimeStream.getAudioTracks()[0], realtimeStream);
+
+    realtimeDc = pc.createDataChannel("oai-events");
+    realtimeDc.addEventListener("open", () => {
+      setRealtimeActive(true);
+      applyState("listening");
+      showSubtitle("Modo Realtime ativo.");
+    });
+    realtimeDc.addEventListener("message", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "response.audio_transcript.done" && data.transcript) {
+          showSubtitle(data.transcript);
+        }
+        if (data.type === "input_audio_buffer.speech_started") applyState("listening");
+        if (data.type === "response.created") applyState("thinking");
+        if (data.type === "response.done") applyState("listening");
+      } catch (_) {}
+    });
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
+      method: "POST",
+      body: offer.sdp,
+      headers: {
+        Authorization: `Bearer ${clientSecret}`,
+        "Content-Type": "application/sdp",
+      },
+    });
+    if (!sdpResponse.ok) {
+      throw new Error(await sdpResponse.text());
+    }
+
+    const answer: RTCSessionDescriptionInit = {
+      type: "answer",
+      sdp: await sdpResponse.text(),
+    };
+    await pc.setRemoteDescription(answer);
+  } catch (error) {
+    stopRealtime();
+    errorEl.textContent = error instanceof Error ? error.message : "Falha no Realtime";
+    applyState("idle");
+  }
+}
+
+function stopRealtime(): void {
+  realtimeDc?.close();
+  realtimePc?.close();
+  realtimeStream?.getTracks().forEach((track) => track.stop());
+  realtimeAudio?.remove();
+  realtimeDc = null;
+  realtimePc = null;
+  realtimeStream = null;
+  realtimeAudio = null;
+  setRealtimeActive(false);
+  applyState("idle");
+}
+
 muteBtn.onclick = () => {
   isMuted = !isMuted;
   muteBtn.classList.toggle("is-muted", isMuted);
@@ -326,6 +434,10 @@ muteBtn.onclick = () => {
 
 captureBtn.onclick = () => {
   send({ action: "capture" });
+};
+
+realtimeBtn.onclick = () => {
+  startRealtime();
 };
 
 keyboardToggle.onclick = () => toggleKeyboard();
