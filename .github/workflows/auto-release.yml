@@ -1,0 +1,131 @@
+name: Build and publish Rony updater
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - update_manifest.json
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rony-auto-release
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure version
+        shell: pwsh
+        run: |
+          $version = "1.0.${{ github.run_number }}"
+          $assetName = "Rony_Setup_$version.exe"
+          $downloadUrl = "https://github.com/${{ github.repository }}/releases/download/latest/$assetName"
+
+          "RONY_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RONY_ASSET_NAME=$assetName" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "RONY_DOWNLOAD_URL=$downloadUrl" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+          (Get-Content -LiteralPath "main.py" -Raw) `
+            -replace 'VERSION = "[^"]+"', "VERSION = `"$version`"" |
+            Set-Content -LiteralPath "main.py" -Encoding UTF8
+
+          (Get-Content -LiteralPath "installer\Setup.iss" -Raw) `
+            -replace '#define MyAppVersion\s+"[^"]+"', "#define MyAppVersion   `"$version`"" |
+            Set-Content -LiteralPath "installer\Setup.iss" -Encoding UTF8
+
+          $manifest = [ordered]@{
+            latest_version = $version
+            download_url = $downloadUrl
+            notes = "Atualizacao automatica do R.O.N.Y a partir do commit ${{ github.sha }}."
+            mandatory = $false
+          }
+          $manifest | ConvertTo-Json -Depth 4 |
+            Set-Content -LiteralPath "update_manifest.json" -Encoding UTF8
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        shell: pwsh
+        working-directory: frontend
+        run: |
+          npm.cmd ci
+          npm.cmd run build
+
+      - name: Prepare PyInstaller environment
+        shell: pwsh
+        run: |
+          python -m venv venv
+          .\venv\Scripts\python.exe -m pip install --upgrade pip
+          .\venv\Scripts\python.exe -m pip install pyinstaller --no-cache-dir
+
+      - name: Build Rony.exe
+        shell: cmd
+        run: GERAR_EXECUTAVEL.bat < NUL
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+
+      - name: Build installer
+        shell: cmd
+        run: GERAR_INSTALADOR.bat < NUL
+
+      - name: Publish latest release asset
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $installer = "installer_output\$env:RONY_ASSET_NAME"
+          if (-not (Test-Path -LiteralPath $installer)) {
+            throw "Instalador nao encontrado: $installer"
+          }
+
+          gh release view latest --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create latest $installer `
+              --repo "${{ github.repository }}" `
+              --target "${{ github.sha }}" `
+              --title "R.O.N.Y latest" `
+              --notes "Build automatico v$env:RONY_VERSION." `
+              --latest
+          } else {
+            gh release upload latest $installer `
+              --repo "${{ github.repository }}" `
+              --clobber
+            gh release edit latest `
+              --repo "${{ github.repository }}" `
+              --title "R.O.N.Y latest" `
+              --notes "Build automatico v$env:RONY_VERSION." `
+              --latest
+          }
+
+      - name: Commit updater manifest
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update_manifest.json
+          git commit -m "chore: update auto-release manifest to v$env:RONY_VERSION"
+          git push
