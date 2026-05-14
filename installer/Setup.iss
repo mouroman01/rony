@@ -111,6 +111,7 @@ Name: "{group}\{#MyAppName}"; \
   Filename: "{app}\{#MyAppExeName}"; \
   WorkingDir: "{app}"; \
   IconFilename: "{app}\{#MyAppExeName}"; \
+  IconFilename: "{app}\{#MyAppExeName}"; \
   AppUserModelID: "RONY.AssistentePessoal.Desktop"
 
 Name: "{group}\Configurar {#MyAppName}"; \

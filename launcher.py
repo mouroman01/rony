@@ -27,7 +27,9 @@ def _mostrar_erro(msg: str) -> None:
 
 def main() -> None:
     app_dir  = _app_dir()
-    venv_py  = app_dir / "venv" / "Scripts" / "python.exe"
+    venv_dir = app_dir / "venv" / "Scripts"
+    venv_py  = venv_dir / "python.exe"
+    venv_gui = venv_dir / "pythonw.exe"
     main_py  = app_dir / "main.py"
     instalar = app_dir / "INSTALAR.bat"
 
@@ -60,15 +62,23 @@ def main() -> None:
             return
 
     # ── Inicia o Rony sem abrir janela de terminal ────────────
+    runtime_py = venv_gui if venv_gui.exists() else venv_py
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
+        startupinfo = None
+        if os.name == "nt":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = 0
+
         subprocess.Popen(
-            [str(venv_py), str(main_py)],
+            [str(runtime_py), str(main_py)],
             cwd=str(app_dir),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=creationflags,
+            startupinfo=startupinfo,
             close_fds=True,
         )
     except Exception as e:
