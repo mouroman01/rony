@@ -44,6 +44,10 @@ def criar_atalho_windows():
     atalho_path = desktop / "Rony.lnk"
     launcher, icon = _atalho_paths()
 
+    if atalho_path.exists():
+        print(f"Atalho ja existe: {atalho_path}")
+        return True
+
     try:
         shell = win32com.client.Dispatch("WScript.Shell")
         atalho = shell.CreateShortCut(str(atalho_path))

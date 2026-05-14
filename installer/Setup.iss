@@ -110,7 +110,8 @@ Source: "..\\_setup\*"; DestDir: "{app}\_setup"; \
 Name: "{group}\{#MyAppName}"; \
   Filename: "{app}\{#MyAppExeName}"; \
   WorkingDir: "{app}"; \
-  IconFilename: "{app}\{#MyAppExeName}"
+  IconFilename: "{app}\{#MyAppExeName}"; \
+  AppUserModelID: "RONY.AssistentePessoal.Desktop"
 
 Name: "{group}\Configurar {#MyAppName}"; \
   Filename: "{app}\_setup\setup_wizard.py"; \
@@ -124,12 +125,14 @@ Name: "{autodesktop}\{#MyAppName}"; \
   Filename: "{app}\{#MyAppExeName}"; \
   WorkingDir: "{app}"; \
   IconFilename: "{app}\{#MyAppExeName}"; \
+  AppUserModelID: "RONY.AssistentePessoal.Desktop"; \
   Tasks: desktopicon
 
 ; Startup (opcional)
 Name: "{userstartup}\{#MyAppName}"; \
   Filename: "{app}\{#MyAppExeName}"; \
   WorkingDir: "{app}"; \
+  AppUserModelID: "RONY.AssistentePessoal.Desktop"; \
   Tasks: startupicon
 
 ; ── Execução pós-instalação ──────────────────────────────────

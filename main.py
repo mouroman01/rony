@@ -43,6 +43,9 @@ load_dotenv()
 VERSION = "1.0.0"
 from rony_paths import RONY_DIR, CONFIG_FILE as _CONFIG_FILE
 
+APP_USER_MODEL_ID = "RONY.AssistentePessoal.Desktop"
+APP_WINDOW_TITLE = "R.O.N.Y  ·  Assistente Pessoal"
+
 # ── Modo PyWebView (janela desktop nativa) ────────────────────
 _pywebview_mode   = False  # True quando PyWebView está ativo
 _pywebview_window = None   # referência à janela (para evaluate_js no updater)
@@ -2040,6 +2043,73 @@ def _aguardar_porta(porta: int, timeout: float = 20.0) -> bool:
 
 
 
+
+def _registrar_app_user_model_id() -> None:
+    """Associa o processo ao AppID do Rony para o Windows usar o icone certo."""
+    if os.name != "nt":
+        return
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)
+    except Exception as exc:
+        print(f"[UI] Nao foi possivel registrar AppUserModelID: {exc}")
+
+
+def _aplicar_icone_janela_windows() -> None:
+    """Aplica app.ico na janela nativa do Rony quando ela existir."""
+    if os.name != "nt":
+        return
+
+    icon_path = RONY_DIR / "app.ico"
+    if not icon_path.exists():
+        return
+
+    def _worker():
+        time.sleep(1.0)
+        try:
+            user32 = ctypes.windll.user32
+            current_pid = os.getpid()
+
+            IMAGE_ICON = 1
+            LR_LOADFROMFILE = 0x00000010
+            WM_SETICON = 0x0080
+            ICON_SMALL = 0
+            ICON_BIG = 1
+
+            big_icon = user32.LoadImageW(0, str(icon_path), IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
+            small_icon = user32.LoadImageW(0, str(icon_path), IMAGE_ICON, 16, 16, LR_LOADFROMFILE)
+            if not big_icon and not small_icon:
+                return
+
+            enum_proc_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+
+            def _enum_proc(hwnd, _lparam):
+                pid = ctypes.c_ulong()
+                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if pid.value != current_pid or not user32.IsWindowVisible(hwnd):
+                    return True
+
+                length = user32.GetWindowTextLengthW(hwnd)
+                if length <= 0:
+                    return True
+
+                buffer = ctypes.create_unicode_buffer(length + 1)
+                user32.GetWindowTextW(hwnd, buffer, length + 1)
+                title = buffer.value or ""
+                if "R.O.N.Y" not in title and "Rony" not in title:
+                    return True
+
+                if big_icon:
+                    user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, big_icon)
+                if small_icon:
+                    user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, small_icon)
+                return True
+
+            user32.EnumWindows(enum_proc_type(_enum_proc), 0)
+        except Exception as exc:
+            print(f"[UI] Nao foi possivel aplicar icone da janela: {exc}")
+
+    threading.Thread(target=_worker, daemon=True, name="rony-window-icon").start()
+
 def _obter_ip_local() -> str:
     """Retorna o IP da rede local usado pelo celular para acessar o Rony."""
     try:
@@ -2232,6 +2302,8 @@ def _iniciar_servidor_frontend() -> bool:
 
 
 async def main() -> None:
+    _registrar_app_user_model_id()
+
     print(f"""
 ╔══════════════════════════════════════════════════════╗
 ║   R.O.N.Y  —  Responsive Omni-lingual Neural sYstem  ║
@@ -2296,6 +2368,8 @@ async def _demarrage_async() -> None:
 
 
 if __name__ == "__main__":
+    _registrar_app_user_model_id()
+
     # ── Tenta iniciar como app desktop nativa (PyWebView) ────────
     _pywebview_disponivel = False
     try:
@@ -2321,7 +2395,7 @@ if __name__ == "__main__":
             if _aguardar_porta(porta_fe, timeout=20):
                 print(f"[PYWEBVIEW] Abrindo janela nativa em http://localhost:{porta_fe}")
                 _pywebview_window = webview.create_window(
-                    title="R.O.N.Y  ·  Assistente Pessoal",
+                    title=APP_WINDOW_TITLE,
                     url=f"http://localhost:{porta_fe}",
                     width=1400,
                     height=860,
@@ -2330,6 +2404,7 @@ if __name__ == "__main__":
                     confirm_close=False,
                     background_color="#0a0a0f",
                 )
+                _aplicar_icone_janela_windows()
                 webview.start()
                 # Janela fechada → encerra tudo (thread daemon morre automaticamente)
             else:
