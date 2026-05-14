@@ -1,0 +1,134 @@
+name: Apply update robustness
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-update-robustness.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-update-robustness:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch updater and release workflow
+        shell: pwsh
+        run: |
+          $script = @'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old in text:
+                  return text.replace(old, new, 1)
+              old_crlf = old.replace("\n", "\r\n")
+              new_crlf = new.replace("\n", "\r\n")
+              if old_crlf in text:
+                  return text.replace(old_crlf, new_crlf, 1)
+              raise SystemExit(f"Missing marker: {label}")
+
+          updater = Path("rony_updater.py")
+          text = updater.read_text(encoding="utf-8")
+          if "import base64" not in text:
+              text = replace_once(text, "import json\nimport os\n", "import json\nimport os\nimport base64\n", "base64 import")
+          if "MANIFEST_API_URL" not in text:
+              text = replace_once(
+                  text,
+                  'MANIFEST_URL = (\n    "https://raw.githubusercontent.com/mouroman01/rony/main/update_manifest.json"\n)\n',
+                  'MANIFEST_URL = (\n    "https://raw.githubusercontent.com/mouroman01/rony/main/update_manifest.json"\n)\nMANIFEST_API_URL = (\n    "https://api.github.com/repos/mouroman01/rony/contents/update_manifest.json?ref=main"\n)\n',
+                  "manifest api url",
+              )
+          if '"Cache-Control": "no-cache"' not in text:
+              old = '''def _ler_manifesto() -> dict | None:
+    try:
+        req = urllib.request.Request(
+            MANIFEST_URL,
+            headers={"User-Agent": "Rony-Updater/1.0"},
+        )
+        with urllib.request.urlopen(req, timeout=TIMEOUT_HTTP) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.URLError as e:
+        print(f"[UPDATE] Sem conexao ou URL invalida: {e.reason}")
+        return None
+    except Exception as e:
+        print(f"[UPDATE] Falha ao ler manifesto: {e}")
+        return None
+'''
+              new = '''def _ler_manifesto() -> dict | None:
+    headers = {
+        "User-Agent": "Rony-Updater/1.0",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
+
+    try:
+        req = urllib.request.Request(
+            MANIFEST_URL,
+            headers=headers,
+        )
+        with urllib.request.urlopen(req, timeout=TIMEOUT_HTTP) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except urllib.error.URLError as e:
+        print(f"[UPDATE] Sem conexao ou URL invalida: {e.reason}")
+        return None
+    except Exception as e:
+        print(f"[UPDATE] Falha ao ler manifesto raw: {e}")
+
+    try:
+        req = urllib.request.Request(
+            MANIFEST_API_URL,
+            headers=headers,
+        )
+        with urllib.request.urlopen(req, timeout=TIMEOUT_HTTP) as r:
+            payload = json.loads(r.read().decode("utf-8"))
+            content = payload.get("content", "")
+            decoded = base64.b64decode(content).decode("utf-8")
+            return json.loads(decoded)
+    except urllib.error.URLError as e:
+        print(f"[UPDATE] Sem conexao ou API invalida: {e.reason}")
+        return None
+    except Exception as e:
+        print(f"[UPDATE] Falha ao ler manifesto pela API: {e}")
+        return None
+'''
+              text = replace_once(text, old, new, "manifest fallback")
+          updater.write_text(text, encoding="utf-8")
+
+          workflow = Path(".github/workflows/auto-release.yml")
+          text = workflow.read_text(encoding="utf-8")
+          if "git pull --rebase origin main" not in text:
+              text = replace_once(
+                  text,
+                  '          git commit -m "chore: update auto-release manifest to v$env:RONY_VERSION"\n          git push\n',
+                  '          git commit -m "chore: update auto-release manifest to v$env:RONY_VERSION"\n          git pull --rebase origin main\n          git push\n',
+                  "manifest push rebase",
+              )
+          workflow.write_text(text, encoding="utf-8")
+          '@
+          $script = $script -replace '(?m)^          ', ''
+          Set-Content -LiteralPath _apply_update_robustness.py -Value $script -Encoding UTF8
+          python _apply_update_robustness.py
+          python -m py_compile rony_updater.py
+
+      - name: Commit changes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add rony_updater.py .github/workflows/auto-release.yml
+          git status --short
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "fix: harden update manifest handling"
+            git push
+          } else {
+            Write-Host "No source changes to commit."
+          }
