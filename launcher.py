@@ -59,11 +59,20 @@ def main() -> None:
             )
             return
 
-    # ── Inicia o Rony ────────────────────────────────────────
-    subprocess.run(
-        [str(venv_py), str(main_py)],
-        cwd=str(app_dir),
-    )
+    # ── Inicia o Rony sem abrir janela de terminal ────────────
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    try:
+        subprocess.Popen(
+            [str(venv_py), str(main_py)],
+            cwd=str(app_dir),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creationflags,
+            close_fds=True,
+        )
+    except Exception as e:
+        _mostrar_erro(f"Não foi possível iniciar o Rony.\n\n{e}")
 
 
 if __name__ == "__main__":
