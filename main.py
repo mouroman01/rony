@@ -139,6 +139,7 @@ GROK_KEY      = os.getenv("XAI_API_KEY", "")
 
 # ── WebSocket ─────────────────────────────────────────────────
 WS_PORT          = 8765
+LAN_HOST         = "0.0.0.0"
 CONNECTED_CLIENTS: set = set()
 
 # ── État global ───────────────────────────────────────────────
@@ -1866,14 +1867,14 @@ def _iniciar_servidor_frontend() -> bool:
 
     def _run():
         try:
-            servidor = http.server.HTTPServer(("localhost", porta), _Handler)
+            servidor = http.server.HTTPServer((LAN_HOST, porta), _Handler)
             servidor.serve_forever()
         except OSError:
             pass  # Porta já em uso (ex: npm dev já rodando)
 
     t = threading.Thread(target=_run, daemon=True, name="rony-frontend-server")
     t.start()
-    print(f"[UI] Servidor frontend iniciado em http://localhost:{porta}")
+    print(f"[UI] Servidor frontend iniciado em http://localhost:{porta} e na rede local pela porta {porta}")
     return True
 
 
@@ -1908,7 +1909,7 @@ async def main() -> None:
     asyncio.create_task(_demarrage_async())
 
     # Serveur WebSocket + écoute micro en parallèle
-    ws_server = websockets.serve(ws_handler, "localhost", WS_PORT)
+    ws_server = websockets.serve(ws_handler, LAN_HOST, WS_PORT)
 
     await asyncio.gather(
         ws_server,
