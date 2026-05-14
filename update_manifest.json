@@ -1,6 +1,6 @@
 {
-  "latest_version": "1.0.14",
-  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.14.exe",
-  "notes": "Atualizacao automatica do R.O.N.Y a partir do commit 32cf27bf55ab3045ade54273b134d4b3249d4963.",
+  "latest_version": "1.0.18",
+  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.18.exe",
+  "notes": "Atualizacao automatica do R.O.N.Y a partir do commit da7ca133326616c932324b491af68f1706ac2d35.",
   "mandatory": false
 }
