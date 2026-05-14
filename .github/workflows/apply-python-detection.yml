@@ -1,0 +1,103 @@
+name: Apply Python detection fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-python-detection.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-python-detection:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch installer Python detection
+        shell: pwsh
+        run: |
+          $script = @'
+          from pathlib import Path
+
+          path = Path("installer/Setup.iss")
+          text = path.read_text(encoding="utf-8")
+          if "HasPython: Boolean" not in text:
+              old = '''function InitializeSetup(): Boolean;
+          var
+            PythonPath: String;
+            ResultCode: Integer;
+          begin
+            Result := True;
+
+            // Verifica se Python 3.10+ está instalado
+            if not RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.12\InstallPath', '', PythonPath) and
+               not RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.11\InstallPath', '', PythonPath) and
+               not RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.10\InstallPath', '', PythonPath) and
+               not RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.12\InstallPath', '', PythonPath) and
+               not RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.11\InstallPath', '', PythonPath) and
+               not RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.10\InstallPath', '', PythonPath) then
+          '''
+              new = '''function InitializeSetup(): Boolean;
+          var
+            PythonPath: String;
+            ResultCode: Integer;
+            HasPython: Boolean;
+          begin
+            Result := True;
+            HasPython := False;
+
+            // Verifica se Python 3.10+ está instalado
+            if Exec(ExpandConstant('{cmd}'), '/C py -3 -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+              HasPython := True;
+
+            if (not HasPython) and Exec(ExpandConstant('{cmd}'), '/C python -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+              HasPython := True;
+
+            if (not HasPython) and (
+               RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.14\InstallPath', '', PythonPath) or
+               RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.13\InstallPath', '', PythonPath) or
+               RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.12\InstallPath', '', PythonPath) or
+               RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.11\InstallPath', '', PythonPath) or
+               RegQueryStringValue(HKCU, 'Software\Python\PythonCore\3.10\InstallPath', '', PythonPath) or
+               RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.14\InstallPath', '', PythonPath) or
+               RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.13\InstallPath', '', PythonPath) or
+               RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.12\InstallPath', '', PythonPath) or
+               RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.11\InstallPath', '', PythonPath) or
+               RegQueryStringValue(HKLM, 'SOFTWARE\Python\PythonCore\3.10\InstallPath', '', PythonPath)) then
+              HasPython := True;
+
+            if not HasPython then
+          '''
+              if old not in text:
+                  old = old.replace("\n", "\r\n")
+                  new = new.replace("\n", "\r\n")
+              if old not in text:
+                  raise SystemExit("Python detection block not found")
+              text = text.replace(old, new, 1)
+              path.write_text(text, encoding="utf-8")
+          '@
+          $script = $script -replace '(?m)^          ', ''
+          Set-Content -LiteralPath _apply_python_detection.py -Value $script -Encoding UTF8
+          python _apply_python_detection.py
+
+      - name: Commit changes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add installer/Setup.iss
+          git status --short
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "fix: detect Python 3.10+ during install"
+            git push
+          } else {
+            Write-Host "No source changes to commit."
+          }
