@@ -1,0 +1,98 @@
+name: Apply runtime icon fix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-runtime-icon.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-runtime-icon:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch launcher and startup icon
+        shell: pwsh
+        run: |
+          $script = @'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old in text:
+                  return text.replace(old, new, 1)
+              old_crlf = old.replace("\n", "\r\n")
+              new_crlf = new.replace("\n", "\r\n")
+              if old_crlf in text:
+                  return text.replace(old_crlf, new_crlf, 1)
+              raise SystemExit(f"Missing marker: {label}")
+
+          launcher = Path("launcher.py")
+          text = launcher.read_text(encoding="utf-8")
+          if "venv_gui" not in text:
+              text = replace_once(
+                  text,
+                  '    venv_py  = app_dir / "venv" / "Scripts" / "python.exe"\n',
+                  '    venv_dir = app_dir / "venv" / "Scripts"\n    venv_py  = venv_dir / "python.exe"\n    venv_gui = venv_dir / "pythonw.exe"\n',
+                  "launcher pythonw paths",
+              )
+              text = replace_once(
+                  text,
+                  '    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)\n    try:\n        subprocess.Popen(\n            [str(venv_py), str(main_py)],\n',
+                  '    runtime_py = venv_gui if venv_gui.exists() else venv_py\n    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)\n    try:\n        startupinfo = None\n        if os.name == "nt":\n            startupinfo = subprocess.STARTUPINFO()\n            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW\n            startupinfo.wShowWindow = 0\n\n        subprocess.Popen(\n            [str(runtime_py), str(main_py)],\n',
+                  "launcher runtime pythonw",
+              )
+              text = replace_once(
+                  text,
+                  '            creationflags=creationflags,\n            close_fds=True,\n',
+                  '            creationflags=creationflags,\n            startupinfo=startupinfo,\n            close_fds=True,\n',
+                  "launcher startupinfo",
+              )
+          launcher.write_text(text, encoding="utf-8")
+
+          setup = Path("installer/Setup.iss")
+          text = setup.read_text(encoding="utf-8")
+          startup_marker = 'Name: "{userstartup}\\{#MyAppName}";'
+          startup_index = text.find(startup_marker)
+          if startup_index == -1:
+              raise SystemExit("Missing startup shortcut block")
+          next_section = text.find("\n\n", startup_index)
+          if next_section == -1:
+              next_section = len(text)
+          startup_block = text[startup_index:next_section]
+          if "IconFilename" not in startup_block:
+              text = replace_once(
+                  text,
+                  '  WorkingDir: "{app}"; \\\n',
+                  '  WorkingDir: "{app}"; \\\n  IconFilename: "{app}\\{#MyAppExeName}"; \\\n',
+                  "startup icon filename",
+              )
+          setup.write_text(text, encoding="utf-8")
+          '@
+          $script = $script -replace '(?m)^          ', ''
+          Set-Content -LiteralPath _apply_runtime_icon.py -Value $script -Encoding UTF8
+          python _apply_runtime_icon.py
+          python -m py_compile launcher.py main.py _setup\setup_wizard.py
+
+      - name: Commit changes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add launcher.py installer/Setup.iss
+          git status --short
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "fix: use windowed python runtime for Rony"
+            git push
+          } else {
+            Write-Host "No source changes to commit."
+          }
