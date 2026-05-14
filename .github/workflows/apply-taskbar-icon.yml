@@ -1,0 +1,108 @@
+name: Apply taskbar icon support
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-taskbar-icon.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-taskbar-icon:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Patch icon identity
+        shell: pwsh
+        run: |
+          $script = @'
+          from pathlib import Path
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f"Missing marker: {label}")
+              return text.replace(old, new, 1)
+
+          main = Path("main.py")
+          text = main.read_text(encoding="utf-8")
+          if "APP_USER_MODEL_ID" not in text:
+              text = replace_once(
+                  text,
+                  "from rony_paths import RONY_DIR, CONFIG_FILE as _CONFIG_FILE\n",
+                  "from rony_paths import RONY_DIR, CONFIG_FILE as _CONFIG_FILE\n\nAPP_USER_MODEL_ID = \"RONY.AssistentePessoal.Desktop\"\nAPP_WINDOW_TITLE = \"R.O.N.Y  ·  Assistente Pessoal\"\n",
+                  "app constants",
+              )
+
+          helpers = '''\n\ndef _registrar_app_user_model_id() -> None:\n    """Associa o processo ao AppID do Rony para o Windows usar o icone certo."""\n    if os.name != "nt":\n        return\n    try:\n        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(APP_USER_MODEL_ID)\n    except Exception as exc:\n        print(f"[UI] Nao foi possivel registrar AppUserModelID: {exc}")\n\n\ndef _aplicar_icone_janela_windows() -> None:\n    """Aplica app.ico na janela nativa do Rony quando ela existir."""\n    if os.name != "nt":\n        return\n\n    icon_path = RONY_DIR / "app.ico"\n    if not icon_path.exists():\n        return\n\n    def _worker():\n        time.sleep(1.0)\n        try:\n            user32 = ctypes.windll.user32\n            current_pid = os.getpid()\n\n            IMAGE_ICON = 1\n            LR_LOADFROMFILE = 0x00000010\n            WM_SETICON = 0x0080\n            ICON_SMALL = 0\n            ICON_BIG = 1\n\n            big_icon = user32.LoadImageW(0, str(icon_path), IMAGE_ICON, 32, 32, LR_LOADFROMFILE)\n            small_icon = user32.LoadImageW(0, str(icon_path), IMAGE_ICON, 16, 16, LR_LOADFROMFILE)\n            if not big_icon and not small_icon:\n                return\n\n            enum_proc_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)\n\n            def _enum_proc(hwnd, _lparam):\n                pid = ctypes.c_ulong()\n                user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))\n                if pid.value != current_pid or not user32.IsWindowVisible(hwnd):\n                    return True\n\n                length = user32.GetWindowTextLengthW(hwnd)\n                if length <= 0:\n                    return True\n\n                buffer = ctypes.create_unicode_buffer(length + 1)\n                user32.GetWindowTextW(hwnd, buffer, length + 1)\n                title = buffer.value or ""\n                if "R.O.N.Y" not in title and "Rony" not in title:\n                    return True\n\n                if big_icon:\n                    user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, big_icon)\n                if small_icon:\n                    user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, small_icon)\n                return True\n\n            user32.EnumWindows(enum_proc_type(_enum_proc), 0)\n        except Exception as exc:\n            print(f"[UI] Nao foi possivel aplicar icone da janela: {exc}")\n\n    threading.Thread(target=_worker, daemon=True, name="rony-window-icon").start()\n'''
+          if "def _registrar_app_user_model_id" not in text:
+              text = replace_once(text, "\ndef _obter_ip_local() -> str:\n", helpers + "\ndef _obter_ip_local() -> str:\n", "icon helpers")
+          if "async def main() -> None:\n    _registrar_app_user_model_id()" not in text:
+              text = replace_once(text, "async def main() -> None:\n", "async def main() -> None:\n    _registrar_app_user_model_id()\n\n", "main appid")
+          if "if __name__ == \"__main__\":\n    _registrar_app_user_model_id()" not in text:
+              text = replace_once(text, "if __name__ == \"__main__\":\n", "if __name__ == \"__main__\":\n    _registrar_app_user_model_id()\n\n", "entry appid")
+          text = text.replace('title="R.O.N.Y  ·  Assistente Pessoal",', 'title=APP_WINDOW_TITLE,')
+          if "_aplicar_icone_janela_windows()\n                webview.start()" not in text:
+              text = replace_once(text, "                webview.start()\n", "                _aplicar_icone_janela_windows()\n                webview.start()\n", "window icon call")
+          main.write_text(text, encoding="utf-8")
+
+          setup = Path("installer/Setup.iss")
+          text = setup.read_text(encoding="utf-8")
+          appid = 'AppUserModelID: "RONY.AssistentePessoal.Desktop"'
+          if appid not in text:
+              text = replace_once(
+                  text,
+                  '  IconFilename: "{app}\\{#MyAppExeName}"\n',
+                  '  IconFilename: "{app}\\{#MyAppExeName}"; \\\n  AppUserModelID: "RONY.AssistentePessoal.Desktop"\n',
+                  "start menu appid",
+              )
+              text = replace_once(
+                  text,
+                  '  IconFilename: "{app}\\{#MyAppExeName}"; \\\n  Tasks: desktopicon\n',
+                  '  IconFilename: "{app}\\{#MyAppExeName}"; \\\n  AppUserModelID: "RONY.AssistentePessoal.Desktop"; \\\n  Tasks: desktopicon\n',
+                  "desktop appid",
+              )
+              text = replace_once(
+                  text,
+                  '  WorkingDir: "{app}"; \\\n  Tasks: startupicon\n',
+                  '  WorkingDir: "{app}"; \\\n  AppUserModelID: "RONY.AssistentePessoal.Desktop"; \\\n  Tasks: startupicon\n',
+                  "startup appid",
+              )
+          setup.write_text(text, encoding="utf-8")
+
+          shortcut = Path("_setup/criar_atalho.py")
+          text = shortcut.read_text(encoding="utf-8")
+          if "Atalho ja existe" not in text:
+              text = replace_once(
+                  text,
+                  '    atalho_path = desktop / "Rony.lnk"\n    launcher, icon = _atalho_paths()\n\n',
+                  '    atalho_path = desktop / "Rony.lnk"\n    launcher, icon = _atalho_paths()\n\n    if atalho_path.exists():\n        print(f"Atalho ja existe: {atalho_path}")\n        return True\n\n',
+                  "preserve installer shortcut",
+              )
+          shortcut.write_text(text, encoding="utf-8")
+          '@
+          Set-Content -LiteralPath _apply_taskbar_icon.py -Value $script -Encoding UTF8
+          python _apply_taskbar_icon.py
+          python -m py_compile main.py _setup\criar_atalho.py launcher.py
+
+      - name: Commit changes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py installer/Setup.iss _setup/criar_atalho.py
+          git status --short
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "fix: use Rony icon for desktop window"
+            git push
+          } else {
+            Write-Host "No source changes to commit."
+          }
