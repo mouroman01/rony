@@ -238,6 +238,10 @@ def _carregar_config() -> dict:
 def _nome_usuario() -> str:
     return _carregar_config().get("nom_utilisateur", "")
 
+def _nome_assistente() -> str:
+    nome = str(_carregar_config().get("nom_assistant", "")).strip()
+    return nome or "Rony"
+
 def _humor_ativo() -> bool:
     return _carregar_config().get("humor", True)
 
@@ -252,6 +256,7 @@ def construire_system_prompt() -> str:
     heure    = datetime.now().strftime("%H:%M")
     data_str = datetime.now().strftime("%A, %d de %B de %Y")
     nome     = _nome_usuario()
+    assistant_name = _nome_assistente()
     humor    = _humor_ativo()
 
     # Saudação por hora
@@ -276,7 +281,7 @@ def construire_system_prompt() -> str:
     } if humor else {}
 
     prompts = {
-        "pt": f"""Você é Rony — um assistente pessoal inteligente, caloroso e genuinamente útil.
+        "pt": f"""Você é {assistant_name} — um assistente pessoal inteligente, caloroso e genuinamente útil.
 Você fala com {nome if nome else 'o usuário'} como um amigo próximo e competente, não como um robô.
 
 Contexto atual:
@@ -309,9 +314,9 @@ Regras:
 - Responda SEMPRE no idioma em que o usuário falar.
 - Você tem autonomia total para executar qualquer tarefa no computador — use as ferramentas disponíveis sem hesitar.
 - Ações do sistema são executadas automaticamente — não precisa descrevê-las em detalhes técnicos.
-- Jamais mencione JARVIS. Você é Rony, e sempre foi.""",
+- Jamais mencione JARVIS. Você é {assistant_name}, e sempre foi.""",
 
-        "fr": f"""Tu es Rony — un assistant personnel intelligent, chaleureux et vraiment utile.
+        "fr": f"""Tu es {assistant_name} — un assistant personnel intelligent, chaleureux et vraiment utile.
 Tu parles à {nome if nome else "l'utilisateur"} comme un ami proche et compétent, pas comme un robot.
 
 Contexte actuel :
@@ -344,9 +349,9 @@ Règles :
 - Réponds TOUJOURS dans la langue dans laquelle l'utilisateur te parle.
 - Tu as une autonomie totale pour exécuter n'importe quelle tâche — utilise les outils disponibles sans hésitation.
 - Les actions système s'exécutent automatiquement — inutile de les décrire techniquement.
-- Ne mentionne jamais JARVIS. Tu es Rony, et tu l'as toujours été.""",
+- Ne mentionne jamais JARVIS. Tu es {assistant_name}, et tu l'as toujours été.""",
 
-        "en": f"""You are Rony — an intelligent, warm, and genuinely helpful personal assistant.
+        "en": f"""You are {assistant_name} — an intelligent, warm, and genuinely helpful personal assistant.
 You talk to {nome if nome else "the user"} like a close, competent friend — not like a robot.
 
 Current context:
@@ -379,9 +384,9 @@ Rules:
 - ALWAYS respond in the language the user speaks to you.
 - You have full autonomy to execute any task on the computer — use available tools without hesitation.
 - System actions execute automatically — no need to describe them technically.
-- Never mention JARVIS. You are Rony, and always have been.""",
+- Never mention JARVIS. You are {assistant_name}, and always have been.""",
 
-        "es": f"""Eres Rony — un asistente personal inteligente, cálido y genuinamente útil.
+        "es": f"""Eres {assistant_name} — un asistente personal inteligente, cálido y genuinamente útil.
 Hablas con {nome if nome else "el usuario"} como un amigo cercano y competente, no como un robot.
 
 Contexto actual:
@@ -402,7 +407,7 @@ Capacidades: Archivos, apps, música, clima, hogar inteligente, emails, calendar
 
 Reglas: Responde SIEMPRE en el idioma del usuario. Nunca menciones JARVIS.""",
 
-        "de": f"""Du bist Rony — ein intelligenter, warmherziger und wirklich hilfreicher persönlicher Assistent.
+        "de": f"""Du bist {assistant_name} — ein intelligenter, warmherziger und wirklich hilfreicher persönlicher Assistent.
 Du sprichst mit {nome if nome else "dem Benutzer"} wie ein enger, kompetenter Freund — nicht wie ein Roboter.
 
 Aktueller Kontext:
@@ -2195,13 +2200,14 @@ def _iniciar_servidor_frontend() -> bool:
                     self._send_json(400, {"error": "OPENAI_API_KEY nao configurada no .env."})
                     return
 
+                assistant_realtime_name = _nome_assistente()
                 payload = {
                     "expires_after": {"anchor": "created_at", "seconds": 600},
                     "session": {
                         "type": "realtime",
                         "model": OPENAI_REALTIME_MODEL,
                         "instructions": (
-                            "Voce e R.O.N.Y, um assistente pessoal de voz. "
+                            f"Voce e {assistant_realtime_name}, um assistente pessoal de voz. "
                             "Responda em portugues do Brasil por padrao, de forma curta, natural e util. "
                             "Quando o usuario pedir uma acao no computador, use a ferramenta executar_rony."
                         ),

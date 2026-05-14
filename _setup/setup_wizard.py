@@ -167,6 +167,7 @@ def carregar_config() -> dict:
         "quota_cooldown_sec": 30,
         "captures_max": 50,
         "nom_utilisateur": "",
+        "nom_assistant": "Rony",
         "personalidade": "amigavel",
         "humor": True,
     }

@@ -161,6 +161,107 @@ Type: filesandordirs; Name: "{app}\frontend\node_modules"
 
 ; ── Código Pascal — verificação de pré-requisitos ─────────────
 [Code]
+var
+  RonyConfigPage: TInputQueryWizardPage;
+
+function JsonEscape(Value: String): String;
+begin
+  StringChangeEx(Value, '\', '\\', True);
+  StringChangeEx(Value, '"', '\"', True);
+  Result := Value;
+end;
+
+function EnvHasApiInput(): Boolean;
+begin
+  Result :=
+    (Trim(RonyConfigPage.Values[2]) <> '') or
+    (Trim(RonyConfigPage.Values[3]) <> '') or
+    (Trim(RonyConfigPage.Values[4]) <> '') or
+    (Trim(RonyConfigPage.Values[5]) <> '') or
+    (Trim(RonyConfigPage.Values[6]) <> '');
+end;
+
+procedure InitializeWizard();
+begin
+  RonyConfigPage := CreateInputQueryPage(
+    wpSelectDir,
+    'Configuracao inicial do Rony',
+    'Informe como o Rony deve se identificar e quais APIs ja deseja usar.',
+    'Esses dados podem ficar em branco. O Rony continuara usando o nome padrao se nenhum nome de assistente for informado.'
+  );
+
+  RonyConfigPage.Add('Como a pessoa quer ser chamada?', False);
+  RonyConfigPage.Add('Nome do assistente:', False);
+  RonyConfigPage.Add('Gemini API Key:', True);
+  RonyConfigPage.Add('Groq API Key:', True);
+  RonyConfigPage.Add('OpenAI API Key:', True);
+  RonyConfigPage.Add('Anthropic API Key:', True);
+  RonyConfigPage.Add('XAI/Grok API Key:', True);
+  RonyConfigPage.Values[1] := 'Rony';
+end;
+
+procedure SaveRonyInstallerConfig();
+var
+  DataDir: String;
+  EnvPath: String;
+  ConfigPath: String;
+  UserName: String;
+  AssistantName: String;
+  EnvText: String;
+  ConfigText: String;
+begin
+  if not Assigned(RonyConfigPage) then
+    Exit;
+
+  UserName := Trim(RonyConfigPage.Values[0]);
+  AssistantName := Trim(RonyConfigPage.Values[1]);
+  if AssistantName = '' then
+    AssistantName := 'Rony';
+
+  if EnvHasApiInput() then
+  begin
+    EnvPath := ExpandConstant('{app}\.env');
+    EnvText :=
+      'GEMINI_API_KEY=' + Trim(RonyConfigPage.Values[2]) + #13#10 +
+      'GROQ_API_KEY=' + Trim(RonyConfigPage.Values[3]) + #13#10 +
+      'OPENAI_API_KEY=' + Trim(RonyConfigPage.Values[4]) + #13#10 +
+      'ANTHROPIC_API_KEY=' + Trim(RonyConfigPage.Values[5]) + #13#10 +
+      'XAI_API_KEY=' + Trim(RonyConfigPage.Values[6]) + #13#10;
+    SaveStringToFile(EnvPath, EnvText, False);
+  end;
+
+  DataDir := ExpandConstant('{localappdata}\Rony\data');
+  ForceDirectories(DataDir);
+  ConfigPath := DataDir + '\rony_config.json';
+  ConfigText :=
+    '{' + #13#10 +
+    '  "version": "1.0.0",' + #13#10 +
+    '  "mic_device_index": null,' + #13#10 +
+    '  "langue_defaut": "pt",' + #13#10 +
+    '  "auto_detect_langue": true,' + #13#10 +
+    '  "ws_port": 8765,' + #13#10 +
+    '  "frontend_port": 5173,' + #13#10 +
+    '  "tts_rate": "+0%",' + #13#10 +
+    '  "tts_volume": "+0%",' + #13#10 +
+    '  "historique_max_ram": 30,' + #13#10 +
+    '  "historique_max_disk": 300,' + #13#10 +
+    '  "ia_ordre": ["gemini", "claude", "groq", "openai"],' + #13#10 +
+    '  "quota_cooldown_sec": 30,' + #13#10 +
+    '  "captures_max": 50,' + #13#10 +
+    '  "nom_utilisateur": "' + JsonEscape(UserName) + '",' + #13#10 +
+    '  "nom_assistant": "' + JsonEscape(AssistantName) + '",' + #13#10 +
+    '  "personalidade": "amigavel",' + #13#10 +
+    '  "humor": true' + #13#10 +
+    '}' + #13#10;
+  SaveStringToFile(ConfigPath, ConfigText, False);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then
+    SaveRonyInstallerConfig();
+end;
+
 function InitializeSetup(): Boolean;
 var
   PythonPath: String;
