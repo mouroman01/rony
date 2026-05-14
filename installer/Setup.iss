@@ -44,10 +44,9 @@ SolidCompression=yes
 LZMAUseSeparateProcess=yes
 
 ; Visual
+SetupIconFile=..\app.ico
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#MyAppExeName}
-WizardImageFile=compiler:WizModernImage.bmp
-WizardSmallImageFile=compiler:WizModernSmallImage.bmp
 
 ; Sem necessidade de admin
 PrivilegesRequired=lowest
@@ -75,7 +74,7 @@ Name: "startupicon"; \
   GroupDescription: "Atalhos adicionais:"; \
   Flags: unchecked
 
-; ── Arquivos a instalar ───────────────────────────────────────
+; ── Arquivos a instalar ──────────────────────────────────────
 [Files]
 ; Executável launcher (gerado por GERAR_EXECUTAVEL.bat)
 Source: "..\release\{#MyAppExeName}"; \
@@ -133,7 +132,7 @@ Name: "{userstartup}\{#MyAppName}"; \
   WorkingDir: "{app}"; \
   Tasks: startupicon
 
-; ── Execução pós-instalação ───────────────────────────────────
+; ── Execução pós-instalação ──────────────────────────────────
 [Run]
 ; Instala dependências Python e builda frontend (pode demorar 2-5 min)
 Filename: "{cmd}"; \
