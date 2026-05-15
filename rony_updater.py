@@ -205,7 +205,6 @@ def verificar_atualizacao(
         # ── Notifica frontend via WebSocket ───────────────────
         if ws_broadcast_fn:
             try:
-                import asyncio
                 payload = json.dumps({
                     "action"  : "update_available",
                     "versao"  : versao_nova,
@@ -215,7 +214,11 @@ def verificar_atualizacao(
                     "mandatory": obrigatoria,
                     "download_url": url_download,
                 })
-                ws_broadcast_fn(payload)
+                result = ws_broadcast_fn(payload)
+                # Se retornou coroutine (chamada assíncrona), descarta sem await
+                # para evitar RuntimeWarning — o broadcast é best-effort
+                if hasattr(result, "close"):
+                    result.close()
             except Exception:
                 pass
 
