@@ -1,0 +1,303 @@
+name: Apply intent router
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-intent-router.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-intent-router:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Apply router files and wiring
+        shell: python
+        run: |
+          from pathlib import Path
+
+          router = r'''"""
+          Roteador local de intencoes do R.O.N.Y.
+
+          Mantem uma memoria curta para comandos incompletos, como "fecha" seguido de
+          "a camera", e evita que frases ambiguas virem acoes perigosas.
+          """
+
+          from __future__ import annotations
+
+          from dataclasses import dataclass
+          from collections import deque
+          import re
+          import time
+          import unicodedata
+
+
+          @dataclass(slots=True)
+          class Intent:
+              action: str | None = None
+              target: str | None = None
+              confidence: float = 0.0
+              needs_clarification: bool = False
+              question: str | None = None
+              source: str = "router"
+
+
+          @dataclass(slots=True)
+          class PendingIntent:
+              action: str
+              created_at: float
+
+
+          class IntentRouter:
+              def __init__(self, pending_ttl: float = 12.0, context_ttl: float = 45.0) -> None:
+                  self.pending_ttl = pending_ttl
+                  self.context_ttl = context_ttl
+                  self._pending: PendingIntent | None = None
+                  self._context: deque[tuple[str, float]] = deque(maxlen=6)
+
+              def route(self, text: str, now: float | None = None) -> Intent:
+                  now = now or time.time()
+                  normalized = normalize_text(text)
+                  tokens = set(normalized.split())
+
+                  self._expire(now)
+
+                  target = self._detect_target(normalized, tokens)
+                  action = self._detect_action(normalized, tokens)
+
+                  if target:
+                      self.remember_target(target, now)
+
+                  if self._pending:
+                      if target:
+                          action = self._pending.action
+                          self._pending = None
+                          return Intent(action=action, target=target, confidence=0.9, source="pending_context")
+                      if self._is_cancel(normalized, tokens):
+                          self._pending = None
+                          return Intent(action="cancelar", confidence=0.9, source="pending_context")
+
+                  if action in {"fechar", "desligar", "parar"}:
+                      if target:
+                          return Intent(action=action, target=target, confidence=0.95, source="direct")
+
+                      recent_target = self._last_target(now)
+                      if recent_target and recent_target != "rony":
+                          return Intent(action=action, target=recent_target, confidence=0.74, source="recent_context")
+
+                      self._pending = PendingIntent(action=action, created_at=now)
+                      return Intent(
+                          action=action,
+                          confidence=0.45,
+                          needs_clarification=True,
+                          question="O que você quer que eu feche?",
+                          source="missing_target",
+                      )
+
+                  if self._is_shutdown(normalized):
+                      return Intent(action="encerrar", target="rony", confidence=0.98, source="direct")
+
+                  return Intent(action=action, target=target, confidence=0.3 if action or target else 0.0, source="pass")
+
+              def remember_target(self, target: str, now: float | None = None) -> None:
+                  now = now or time.time()
+                  self._context.append((target, now))
+
+              def _expire(self, now: float) -> None:
+                  if self._pending and now - self._pending.created_at > self.pending_ttl:
+                      self._pending = None
+                  while self._context and now - self._context[0][1] > self.context_ttl:
+                      self._context.popleft()
+
+              def _last_target(self, now: float) -> str | None:
+                  self._expire(now)
+                  for target, _ in reversed(self._context):
+                      if target:
+                          return target
+                  return None
+
+              def _detect_action(self, normalized: str, tokens: set[str]) -> str | None:
+                  if tokens & {"fecha", "fechar", "feche", "close"}:
+                      return "fechar"
+                  if tokens & {"desliga", "desligar"} or "turn off" in normalized:
+                      return "desligar"
+                  if tokens & {"para", "parar", "pare", "stop"}:
+                      return "parar"
+                  if tokens & {"abre", "abrir", "abra", "open"}:
+                      return "abrir"
+                  return None
+
+              def _detect_target(self, normalized: str, tokens: set[str]) -> str | None:
+                  if tokens & {"camera", "webcam", "cam"}:
+                      return "camera"
+                  if tokens & {"rony", "assistente"}:
+                      return "rony"
+                  if tokens & {"som", "audio", "volume"}:
+                      return "audio"
+                  if tokens & {"chrome"}:
+                      return "chrome"
+                  if tokens & {"edge"}:
+                      return "edge"
+                  if tokens & {"firefox"}:
+                      return "firefox"
+                  if tokens & {"spotify", "musica"}:
+                      return "spotify"
+                  if tokens & {"discord"}:
+                      return "discord"
+                  if tokens & {"vscode", "code"} or "visual studio code" in normalized:
+                      return "vscode"
+                  if tokens & {"teams"}:
+                      return "teams"
+                  if tokens & {"zoom"}:
+                      return "zoom"
+                  if tokens & {"slack"}:
+                      return "slack"
+                  return None
+
+              def _is_cancel(self, normalized: str, tokens: set[str]) -> bool:
+                  return bool(tokens & {"cancela", "cancelar", "deixa", "esquece", "nao"}) or normalized in {
+                      "deixa pra la",
+                      "deixa para la",
+                  }
+
+              def _is_shutdown(self, normalized: str) -> bool:
+                  despedidas_exatas = {
+                      "tchau", "ate logo", "ate mais", "au revoir", "goodbye", "bye rony",
+                      "adios", "ciao", "auf wiedersehen", "boa noite rony", "boa tarde rony",
+                  }
+                  comandos_com_alvo = {
+                      "encerrar rony", "encerra rony", "encerre rony", "pode encerrar rony",
+                      "fechar rony", "fecha rony", "feche rony", "pode fechar rony",
+                      "desligar rony", "desliga rony", "pode desligar rony",
+                      "sair rony", "rony pode sair", "pode sair rony",
+                      "stop rony", "close rony", "exit rony", "shut down rony",
+                      "para rony", "para o rony", "cierra rony", "sal rony",
+                  }
+                  return normalized in despedidas_exatas or any(cmd in normalized for cmd in comandos_com_alvo)
+
+
+          def normalize_text(text: str) -> str:
+              text = unicodedata.normalize("NFKD", text.lower())
+              text = "".join(ch for ch in text if not unicodedata.combining(ch))
+              text = re.sub(r"[^\w\s]", " ", text, flags=re.UNICODE)
+              return re.sub(r"\s+", " ", text).strip()
+          '''
+          router = "\n".join(line[10:] if line.startswith("          ") else line for line in router.splitlines()).strip() + "\n"
+          Path('intent_router.py').write_text(router, encoding='utf-8')
+
+          tests = r'''import unittest
+
+          from intent_router import IntentRouter, normalize_text
+
+
+          class IntentRouterTest(unittest.TestCase):
+              def test_direct_camera_close(self):
+                  intent = IntentRouter().route("fechar a câmera", now=100)
+
+                  self.assertEqual(intent.action, "fechar")
+                  self.assertEqual(intent.target, "camera")
+                  self.assertFalse(intent.needs_clarification)
+
+              def test_pending_close_completed_by_target(self):
+                  router = IntentRouter()
+
+                  first = router.route("fechar", now=100)
+                  second = router.route("a câmera", now=104)
+
+                  self.assertTrue(first.needs_clarification)
+                  self.assertEqual(second.action, "fechar")
+                  self.assertEqual(second.target, "camera")
+                  self.assertEqual(second.source, "pending_context")
+
+              def test_recent_context_closes_camera(self):
+                  router = IntentRouter()
+
+                  router.route("abre a camera", now=100)
+                  intent = router.route("fecha", now=105)
+
+                  self.assertEqual(intent.action, "fechar")
+                  self.assertEqual(intent.target, "camera")
+                  self.assertEqual(intent.source, "recent_context")
+
+              def test_plain_close_without_context_asks(self):
+                  intent = IntentRouter().route("fecha", now=100)
+
+                  self.assertTrue(intent.needs_clarification)
+                  self.assertIsNone(intent.target)
+
+              def test_shutdown_requires_rony_or_farewell(self):
+                  router = IntentRouter()
+
+                  shutdown = router.route("fecha o Rony", now=100)
+                  ambiguous = router.route("fecha", now=120)
+
+                  self.assertEqual(shutdown.target, "rony")
+                  self.assertTrue(ambiguous.needs_clarification)
+
+              def test_normalize_text_removes_accents(self):
+                  self.assertEqual(normalize_text("Câmera, por favor!"), "camera por favor")
+
+
+          if __name__ == "__main__":
+              unittest.main()
+          '''
+          tests = "\n".join(line[10:] if line.startswith("          ") else line for line in tests.splitlines()).strip() + "\n"
+          Path('tests').mkdir(exist_ok=True)
+          Path('tests/test_intent_router.py').write_text(tests, encoding='utf-8')
+
+          main = Path('main.py')
+          text = main.read_text(encoding='utf-8')
+          text = text.replace('import unicodedata\n', '', 1)
+          if 'from intent_router import IntentRouter' not in text:
+              text = text.replace('from vision_actions import executar_acao_visao\n', 'from vision_actions import executar_acao_visao\nfrom intent_router import IntentRouter\n', 1)
+          text = text.replace('_intencao_pendente: dict | None = None', '_intent_router = IntentRouter()', 1)
+
+          start = text.find('\n\ndef _normalizar_intencao(')
+          if start != -1:
+              end = text.find('\n# ═', start)
+              if end == -1:
+                  raise RuntimeError('Nao encontrei fim do bloco antigo de intencao')
+              text = text[:start + 1] + text[end:]
+
+          old = '''    global _intencao_pendente\n    t = texte.lower().strip()\n    tn = _normalizar_intencao(texte)\n    langue = get_langue()\n\n    if _intencao_pendente and time.time() - _intencao_pendente.get("ts", 0) <= 12:\n        alvo = _alvo_de_contexto(tn)\n        acao = _intencao_pendente.get("acao")\n        if alvo:\n            _intencao_pendente = None\n            if alvo == "camera" and acao in {"fechar", "desligar", "parar"}:\n                _fermer_app("camera")\n                await parler("Fechei a câmera.")\n                return True\n            if alvo == "rony" and acao in {"fechar", "desligar", "parar"}:\n                await parler(get_reponse("au_revoir"))\n                await asyncio.sleep(0.5)\n                os._exit(0)\n    elif _intencao_pendente:\n        _intencao_pendente = None\n\n    acao_sem_alvo = _verbo_controle_sem_alvo(tn)\n    if acao_sem_alvo:\n        _intencao_pendente = {"acao": acao_sem_alvo, "ts": time.time()}\n        await parler("O que você quer que eu feche?")\n        return True\n\n    resposta_rapida = executar_intencao_rapida(texte)'''
+          new = '''    t = texte.lower().strip()\n    langue = get_langue()\n\n    intent = _intent_router.route(texte)\n    if intent.needs_clarification:\n        await parler(intent.question or "O que você quer que eu faça?")\n        return True\n\n    if intent.action in {"fechar", "desligar", "parar"} and intent.target == "camera":\n        _fermer_app("camera")\n        await parler("Fechei a câmera.")\n        return True\n\n    if intent.action in {"fechar", "desligar", "parar"} and intent.target in {\n        "chrome", "edge", "firefox", "spotify", "discord", "vscode", "teams", "zoom", "slack",\n    }:\n        resultado = _fermer_app(intent.target)\n        await parler(resultado)\n        return True\n\n    if intent.action in {"encerrar", "fechar", "desligar", "parar"} and intent.target == "rony":\n        await parler(get_reponse("au_revoir"))\n        await asyncio.sleep(0.5)\n        os._exit(0)\n\n    resposta_rapida = executar_intencao_rapida(texte)'''
+          if 'intent = _intent_router.route(texte)' not in text:
+              if old not in text:
+                  raise RuntimeError('Nao encontrei bloco antigo de comando de sistema')
+              text = text.replace(old, new, 1)
+
+          start = text.find('    # ── Arrêt / sortie')
+          end = text.find('    # ── Modo Realtime', start)
+          if start != -1 and end != -1:
+              text = text[:start] + text[end:]
+
+          main.write_text(text, encoding='utf-8')
+
+      - name: Validate router
+        run: |
+          py -3 -m unittest tests.test_intent_router
+          py -3 -m py_compile main.py app_launcher.py intent_router.py
+
+      - name: Commit router
+        shell: bash
+        run: |
+          if git diff --quiet -- main.py intent_router.py tests/test_intent_router.py; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py intent_router.py tests/test_intent_router.py
+          git commit -m "feat: add contextual intent router"
+          git pull --rebase origin main
+          git push origin HEAD:main
