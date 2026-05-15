@@ -1,6 +1,12 @@
 {
-  "latest_version": "1.0.28",
-  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.28.exe",
-  "notes": "Atualizacao automatica do R.O.N.Y a partir do commit db28ff46060b57c510f21b584d26aa14283b8e49.",
+  "latest_version": "1.0.29",
+  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.29.exe",
+  "notes": "fix: include changelog in update manifest\nfix: restore generated version files before release rebase\nfeat: route local commands through intent router\nfeat: add intent router module",
+  "changes": [
+    "fix: include changelog in update manifest",
+    "fix: restore generated version files before release rebase",
+    "feat: route local commands through intent router",
+    "feat: add intent router module"
+  ],
   "mandatory": false
 }
