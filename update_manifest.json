@@ -1,13 +1,14 @@
 {
-  "latest_version": "1.0.31",
-  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.31.exe",
-  "notes": "fix: publish update manifest cleanly\nfix: show update details and runtime icon\nfix: include changelog in update manifest\nfix: restore generated version files before release rebase\nfeat: route local commands through intent router",
+  "latest_version": "1.0.32",
+  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.32.exe",
+  "notes": "chore: trigger release workflow for AR build\nchore: trigger release for augmented reality build\nfeat: add augmented reality camera overlay\nfix: make augmented reality workflow idempotent\nfix: repair augmented reality apply workflow\nchore: remove temporary popup details code workflow",
   "changes": [
-    "fix: publish update manifest cleanly",
-    "fix: show update details and runtime icon",
-    "fix: include changelog in update manifest",
-    "fix: restore generated version files before release rebase",
-    "feat: route local commands through intent router"
+    "chore: trigger release workflow for AR build",
+    "chore: trigger release for augmented reality build",
+    "feat: add augmented reality camera overlay",
+    "fix: make augmented reality workflow idempotent",
+    "fix: repair augmented reality apply workflow",
+    "chore: remove temporary popup details code workflow"
   ],
   "mandatory": false
 }
