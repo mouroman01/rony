@@ -132,6 +132,63 @@ html, body {
   color: var(--clr-text);
 }
 
+
+/* Realidade aumentada */
+.ar-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: #020617;
+  display: block;
+}
+.ar-panel.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+#ar-video,
+#ar-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+#ar-video {
+  object-fit: contain;
+  background: #020617;
+}
+#ar-overlay {
+  pointer-events: none;
+}
+.ar-topbar {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(6,182,212,0.35);
+  background: rgba(2,6,23,0.76);
+  color: rgba(255,255,255,0.9);
+  font-size: 12px;
+  text-transform: uppercase;
+  z-index: 90;
+}
+.ar-close {
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.92);
+  cursor: pointer;
+}
+.ar-close:hover {
+  border-color: rgba(248,113,113,0.8);
+  color: #fca5a5;
+}
+
 /* ── Erreur ──────────────────────────────────────────────── */
 .error-text {
   position: fixed;

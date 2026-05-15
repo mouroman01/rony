@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>R.O.N.Y</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌐</text></svg>" />
-  <script type="module" crossorigin src="/assets/index-DMH0YVXc.js"></script>
+  <script type="module" crossorigin src="/assets/index-CZa-KDZj.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/three-Ri557RVM.js">
-  <link rel="stylesheet" crossorigin href="/assets/index-wf08t5AN.css">
+  <link rel="stylesheet" crossorigin href="/assets/index-Bp2OWx6M.css">
 </head>
 <body>
 
@@ -34,6 +34,16 @@
     <p id="subtitle-text"></p>
   </div>
 
+  <!-- Realidade aumentada -->
+  <div id="ar-panel" class="ar-panel hidden">
+    <video id="ar-video" playsinline muted></video>
+    <canvas id="ar-overlay"></canvas>
+    <div class="ar-topbar">
+      <span id="ar-status">AR</span>
+      <button id="ar-close" class="ar-close" type="button" title="Fechar realidade aumentada">x</button>
+    </div>
+  </div>
+
   <!-- Erreur -->
   <div id="error-text" class="error-text"></div>
 
@@ -42,6 +52,7 @@
     <button id="mute-button"     class="ctrl-btn" title="Mute / Unmute">mute</button>
     <button id="realtime-button" class="ctrl-btn" title="Realtime voice">realtime</button>
     <button id="mobile-button"   class="ctrl-btn" title="Acesso pelo celular">celular</button>
+    <button id="ar-button"       class="ctrl-btn" title="Realidade aumentada">AR</button>
     <button id="capture-button"  class="ctrl-btn" title="Screenshot">📷</button>
     <button id="keyboard-toggle" class="ctrl-btn" title="Keyboard">⌨</button>
     <button id="help-toggle"     class="ctrl-btn" title="Help">?</button>
@@ -83,6 +94,6 @@
       <button id="mobile-close" class="ctrl-btn">✕</button>
     </div>
   </div>
-
+
 </body>
 </html>

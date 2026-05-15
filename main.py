@@ -124,7 +124,7 @@ from camera_module import (
     ver_camera, capturar_e_salvar, aprender_rosto,
     resposta_o_que_voce_ve, resposta_tem_alguem, resposta_o_que_e_isso,
     status_camera, inicializar_camera, detectar_objetos, contar_rostos,
-    capturar_camera,
+    capturar_camera, detectar_rostos, reconhecer_rostos,
 )
 from specialist_module import (
     detectar_modo, ativar_modo, desativar_modo, get_modo_atual, modo_ativo,
@@ -875,6 +875,30 @@ async def traiter_commande_systeme(texte: str) -> bool:
     )
     if resposta_visao:
         await parler(resposta_visao)
+        return True
+
+    mots_ar_on = {
+        "realidade aumentada", "modo realidade aumentada", "abrir realidade aumentada",
+        "abre realidade aumentada", "liga realidade aumentada", "ativar realidade aumentada",
+        "interface de realidade aumentada", "modo ar", "abrir ar", "liga ar",
+        "augmented reality", "ar mode",
+    }
+    mots_ar_off = {
+        "fechar realidade aumentada", "fecha realidade aumentada", "desligar realidade aumentada",
+        "sair da realidade aumentada", "parar realidade aumentada", "fechar ar",
+        "desligar ar", "stop ar", "close ar",
+    }
+    if any(m in t for m in mots_ar_off):
+        if CONNECTED_CLIENTS:
+            msg = json.dumps({"action": "ar_mode", "enabled": False})
+            await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
+        await parler("Fechei a realidade aumentada.")
+        return True
+    if any(m in t for m in mots_ar_on):
+        if CONNECTED_CLIENTS:
+            msg = json.dumps({"action": "ar_mode", "enabled": True})
+            await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
+        await parler("Abrindo a realidade aumentada.")
         return True
 
     # ── Modo Realtime ─────────────────────────────────────────
@@ -2281,14 +2305,52 @@ def _iniciar_servidor_frontend() -> bool:
         def do_POST(self):
             import urllib.parse
             path = urllib.parse.urlparse(self.path).path
-            if path != "/api/realtime-tool":
-                self.send_error(404)
-                return
-
             try:
                 length = int(self.headers.get("Content-Length", "0"))
                 raw = self.rfile.read(length).decode("utf-8")
                 payload = json.loads(raw or "{}")
+                if path == "/api/ar-frame":
+                    image_b64 = str(payload.get("image_b64", "")).strip()
+                    if "," in image_b64:
+                        image_b64 = image_b64.split(",", 1)[1]
+                    if not image_b64:
+                        self._send_json(400, {"ok": False, "error": "Frame ausente."})
+                        return
+
+                    try:
+                        img_bytes = base64.b64decode(image_b64, validate=False)
+                    except Exception:
+                        self._send_json(400, {"ok": False, "error": "Frame invalido."})
+                        return
+
+                    lingua = str(payload.get("langue") or get_langue() or "pt")
+                    rostos = detectar_rostos(img_bytes)
+                    nomes = reconhecer_rostos(img_bytes) if rostos else []
+                    pessoas = []
+                    for idx, rosto in enumerate(rostos):
+                        nome = nomes[idx] if idx < len(nomes) else "desconhecido"
+                        pessoas.append({
+                            "label": nome if nome != "desconhecido" else "rosto",
+                            "confidence": None,
+                            **rosto,
+                        })
+
+                    objetos = detectar_objetos(img_bytes, lingua=lingua)
+                    self._send_json(200, {
+                        "ok": True,
+                        "faces": pessoas,
+                        "objects": objetos[:20],
+                        "summary": {
+                            "faces": len(pessoas),
+                            "objects": len(objetos),
+                        },
+                    })
+                    return
+
+                if path != "/api/realtime-tool":
+                    self.send_error(404)
+                    return
+
                 comando = str(payload.get("comando", "")).strip()
                 if not comando:
                     self._send_json(400, {"ok": False, "resultado": "Comando vazio."})

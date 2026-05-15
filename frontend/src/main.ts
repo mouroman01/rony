@@ -36,6 +36,12 @@ const langModal       = document.getElementById("lang-modal")        as HTMLDivE
 const langClose       = document.getElementById("lang-close")        as HTMLButtonElement;
 const langList        = document.getElementById("lang-list")         as HTMLDivElement;
 const realtimeBtn     = document.getElementById("realtime-button")   as HTMLButtonElement;
+const arBtn           = document.getElementById("ar-button")         as HTMLButtonElement;
+const arPanel         = document.getElementById("ar-panel")          as HTMLDivElement;
+const arVideo         = document.getElementById("ar-video")          as HTMLVideoElement;
+const arOverlay       = document.getElementById("ar-overlay")        as HTMLCanvasElement;
+const arStatus        = document.getElementById("ar-status")         as HTMLSpanElement;
+const arClose         = document.getElementById("ar-close")          as HTMLButtonElement;
 const mobileModal     = document.getElementById("mobile-modal")      as HTMLDivElement;
 const mobileClose     = document.getElementById("mobile-close")      as HTMLButtonElement;
 const mobileUrlBtn    = document.getElementById("mobile-url")        as HTMLButtonElement;
@@ -136,6 +142,21 @@ let realtimeDc: RTCDataChannel | null = null;
 let realtimeStream: MediaStream | null = null;
 let realtimeAudio: HTMLAudioElement | null = null;
 let realtimeActive = false;
+let arStream: MediaStream | null = null;
+let arActive = false;
+let arBusy = false;
+let arTimer: number | null = null;
+
+type ArBox = {
+  label?: string;
+  objeto?: string;
+  confidence?: number | null;
+  confianca?: number | null;
+  x: number;
+  y: number;
+  largura: number;
+  altura: number;
+};
 
 function sendRealtimeEvent(payload: object): void {
   if (realtimeDc && realtimeDc.readyState === "open") {
@@ -224,6 +245,14 @@ function handleMessage(data: Record<string, unknown>): void {
         (data.nome as string) || "",
         !!(data.auto),
       );
+      break;
+
+    case "ar_mode":
+      if (data.enabled) {
+        void startArMode();
+      } else {
+        stopArMode();
+      }
       break;
 
     case "pong":
@@ -355,6 +384,141 @@ function toggleKeyboard(show?: boolean): void {
   showKeyboard = show ?? !showKeyboard;
   keyboardHud.classList.toggle("hidden", !showKeyboard);
   if (showKeyboard) keyboardInput.focus();
+}
+
+
+function resizeArOverlay(): void {
+  const rect = arVideo.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  arOverlay.width = Math.max(1, Math.round(rect.width * ratio));
+  arOverlay.height = Math.max(1, Math.round(rect.height * ratio));
+  arOverlay.style.width = `${rect.width}px`;
+  arOverlay.style.height = `${rect.height}px`;
+}
+
+function drawArBoxes(faces: ArBox[], objects: ArBox[], sourceWidth: number, sourceHeight: number): void {
+  resizeArOverlay();
+  const ctx = arOverlay.getContext("2d");
+  if (!ctx) return;
+
+  const ratio = window.devicePixelRatio || 1;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.clearRect(0, 0, arOverlay.width, arOverlay.height);
+
+  const rect = arVideo.getBoundingClientRect();
+  const scale = Math.min(rect.width / sourceWidth, rect.height / sourceHeight);
+  const renderedW = sourceWidth * scale;
+  const renderedH = sourceHeight * scale;
+  const offsetX = (rect.width - renderedW) / 2;
+  const offsetY = (rect.height - renderedH) / 2;
+
+  const draw = (box: ArBox, color: string, fallback: string) => {
+    const x = offsetX + box.x * scale;
+    const y = offsetY + box.y * scale;
+    const w = box.largura * scale;
+    const h = box.altura * scale;
+    const label = box.label || box.objeto || fallback;
+    const score = box.confianca ?? box.confidence;
+    const text = score ? `${label} ${Math.round(score * 100)}%` : label;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+
+    ctx.font = "12px Inter, Segoe UI, sans-serif";
+    const textW = ctx.measureText(text).width + 12;
+    const textH = 22;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, Math.max(0, y - textH), textW, textH);
+    ctx.fillStyle = "#041016";
+    ctx.fillText(text, x + 6, Math.max(14, y - 7));
+  };
+
+  objects.forEach((box) => draw(box, "rgba(6, 182, 212, 0.95)", "objeto"));
+  faces.forEach((box) => draw(box, "rgba(34, 197, 94, 0.95)", "rosto"));
+  arStatus.textContent = `${faces.length} rosto(s) · ${objects.length} objeto(s)`;
+}
+
+async function analyzeArFrame(): Promise<void> {
+  if (!arActive || arBusy || arVideo.readyState < 2) return;
+  arBusy = true;
+  try {
+    const sourceWidth = arVideo.videoWidth || 640;
+    const sourceHeight = arVideo.videoHeight || 360;
+    const targetWidth = 640;
+    const targetHeight = Math.max(1, Math.round(sourceHeight * (targetWidth / sourceWidth)));
+    const frameCanvas = document.createElement("canvas");
+    frameCanvas.width = targetWidth;
+    frameCanvas.height = targetHeight;
+    const frameCtx = frameCanvas.getContext("2d");
+    if (!frameCtx) return;
+
+    frameCtx.drawImage(arVideo, 0, 0, targetWidth, targetHeight);
+    const image_b64 = frameCanvas.toDataURL("image/jpeg", 0.72);
+    const response = await fetch("/api/ar-frame", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image_b64, langue: currentLang }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      arStatus.textContent = data.error || "AR indisponivel";
+      return;
+    }
+    drawArBoxes(data.faces || [], data.objects || [], targetWidth, targetHeight);
+  } catch (_) {
+    arStatus.textContent = "AR indisponivel";
+  } finally {
+    arBusy = false;
+  }
+}
+
+async function startArMode(): Promise<void> {
+  if (arActive) return;
+  if (!navigator.mediaDevices?.getUserMedia) {
+    errorEl.textContent = "Camera indisponivel nesta interface.";
+    return;
+  }
+
+  try {
+    errorEl.textContent = "";
+    arStatus.textContent = "iniciando camera...";
+    arPanel.classList.remove("hidden");
+    arBtn.classList.add("is-realtime");
+    arStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    arVideo.srcObject = arStream;
+    await arVideo.play();
+    arActive = true;
+    arStatus.textContent = "analisando...";
+    resizeArOverlay();
+    await analyzeArFrame();
+    arTimer = window.setInterval(() => { void analyzeArFrame(); }, 900);
+  } catch (error) {
+    stopArMode();
+    errorEl.textContent = error instanceof Error && error.name === "NotAllowedError"
+      ? "Permita o acesso a camera para usar a realidade aumentada."
+      : "Nao consegui iniciar a realidade aumentada.";
+  }
+}
+
+function stopArMode(): void {
+  if (arTimer !== null) {
+    window.clearInterval(arTimer);
+    arTimer = null;
+  }
+  arStream?.getTracks().forEach((track) => track.stop());
+  arStream = null;
+  arVideo.pause();
+  arVideo.srcObject = null;
+  arActive = false;
+  arBusy = false;
+  arPanel.classList.add("hidden");
+  arBtn.classList.remove("is-realtime");
+  const ctx = arOverlay.getContext("2d");
+  ctx?.clearRect(0, 0, arOverlay.width, arOverlay.height);
 }
 
 // ── Événements boutons ────────────────────────────────────────
@@ -524,6 +688,12 @@ realtimeBtn.onclick = () => {
   startRealtime();
 };
 
+arBtn.onclick = () => {
+  if (arActive) stopArMode();
+  else void startArMode();
+};
+arClose.onclick = () => stopArMode();
+
 keyboardToggle.onclick = () => toggleKeyboard();
 helpToggle.onclick     = () => toggleHelp();
 helpClose.onclick      = () => toggleHelp(false);
@@ -571,6 +741,7 @@ document.addEventListener("keydown", (e) => {
     toggleLangModal(false);
     void toggleMobileModal(false);
     toggleKeyboard(false);
+    stopArMode();
   }
   if ((e.ctrlKey || e.metaKey) && e.key === "k") {
     e.preventDefault();
@@ -583,6 +754,9 @@ document.addEventListener("keydown", (e) => {
 });
 
 // ── Boot ──────────────────────────────────────────────────────
+window.addEventListener("resize", () => {
+  if (arActive) resizeArOverlay();
+});
 subtitleBox.classList.add("hidden");
 keyboardHud.classList.add("hidden");
 helpOverlay.classList.add("hidden");
