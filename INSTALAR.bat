@@ -1,16 +1,15 @@
 @echo off
 chcp 65001 >nul
 setlocal EnableDelayedExpansion
-title R.O.N.Y - Instalacao
+title Instalar Rony
 
-cls
 echo.
 echo  +======================================================+
-echo  ^|   R.O.N.Y  ^|  Responsive Omni-lingual Neural sYstem  ^|
-echo  ^|   Instalador v1.0  ^|  github.com/mouroman01/rony       ^|
+echo  ^|   R.O.N.Y  ^|  Instalacao automatica                 ^|
 echo  +======================================================+
 echo.
 
+:: ── Caminhos ────────────────────────────────────────────────
 set "RONY_DIR=%~dp0"
 set "VENV_DIR=%RONY_DIR%venv"
 set "VENV_PY=%VENV_DIR%\Scripts\python.exe"
@@ -37,61 +36,60 @@ echo  [OK] Ambiente virtual pronto.
 echo.
 
 echo  [3/6] Instalando dependencias Python...
-"%VENV_PY%" -m pip install --upgrade pip --quiet
-"%VENV_PIP%" install -r "%RONY_DIR%requirements.txt" --no-warn-script-location
+"%VENV_PY%" -m pip install --upgrade pip --quiet --no-cache-dir
+"%VENV_PIP%" install -r "%RONY_DIR%requirements.txt" --no-warn-script-location --no-cache-dir
 if errorlevel 1 (
     echo  [AVISO] Alguns pacotes falharam. Tentando continuar...
     set "ERROS=1"
 ) else (
-    echo  [OK] Dependencias instaladas.
+    echo  [OK] Dependencias Python instaladas.
 )
 echo.
 
 echo  Verificando PyAudio (microfone)...
 "%VENV_PY%" -c "import pyaudio" >nul 2>&1
 if errorlevel 1 (
-    "%VENV_PIP%" install pyaudio --quiet 2>nul
+    "%VENV_PIP%" install pyaudio --quiet --no-cache-dir 2>nul
     if errorlevel 1 (
         echo  [AVISO] PyAudio nao instalado automaticamente. O Rony ainda pode funcionar em modo texto.
     ) else (
         echo  [OK] PyAudio instalado.
     )
 ) else (
-    echo  [OK] PyAudio ja instalado.
+    echo  [OK] PyAudio instalado.
 )
 
-reg add "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone" /v "Value" /t REG_SZ /d "Allow" /f >nul 2>&1
 echo  [OK] Permissao de microfone garantida.
 echo.
 
-echo  [4/6] Configurando interface grafica...
-node --version >nul 2>&1
-if errorlevel 1 (
-    echo  [AVISO] Node.js nao encontrado. Frontend pre-compilado sera usado.
-) else (
+if exist "%FRONTEND_DIR%\package.json" (
+    echo  [4/6] Configurando interface grafica...
     pushd "%FRONTEND_DIR%"
-    call npm.cmd install --silent 2>nul
-    if not errorlevel 1 call npm.cmd run build 2>nul
-    if errorlevel 1 (
-        echo  [AVISO] Build do frontend falhou. Frontend pre-compilado sera usado.
+    if exist package-lock.json (
+        call npm.cmd ci --silent
     ) else (
-        echo  [OK] Interface compilada.
+        call npm.cmd install --silent
+    )
+    if errorlevel 1 (
+        echo  [AVISO] Falha ao instalar dependencias do frontend.
+        set "ERROS=1"
+    ) else (
+        call npm.cmd run build
+        if errorlevel 1 (
+            echo  [AVISO] Falha ao compilar frontend.
+            set "ERROS=1"
+        ) else (
+            echo  [OK] Interface compilada.
+        )
     )
     popd
+) else (
+    echo  [4/6] Frontend nao encontrado. Pulando.
 )
 echo.
 
 echo  [5/6] Configuracao inicial...
-if not exist "%RONY_DIR%.env" (
-    if exist "%RONY_DIR%.env.example" (
-        copy "%RONY_DIR%.env.example" "%RONY_DIR%.env" >nul
-        echo  [OK] Arquivo .env criado.
-    )
-)
-
-"%VENV_PY%" -c "import json, os, pathlib; local=os.environ.get('LOCALAPPDATA') or str(pathlib.Path.home()/'AppData'/'Local'); cfg=pathlib.Path(local)/'Rony'/'data'/'rony_config.json'; print('ok' if cfg.exists() else 'novo')" > "%TEMP%\rony_status.txt" 2>nul
-set /p RONY_STATUS=<"%TEMP%\rony_status.txt"
-if "%RONY_STATUS%"=="novo" (
+if exist "%SETUP_DIR%\setup_wizard.py" (
     echo  Iniciando assistente de configuracao...
     "%VENV_PY%" "%SETUP_DIR%\setup_wizard.py"
     if errorlevel 1 echo  [AVISO] Configuracao nao concluida. Execute _setup\setup_wizard.py depois.
@@ -101,27 +99,28 @@ if "%RONY_STATUS%"=="novo" (
 echo.
 
 echo  [6/6] Criando atalho na area de trabalho...
-"%VENV_PY%" "%SETUP_DIR%\criar_atalho.py" 2>nul
-if errorlevel 1 (
-    echo  [AVISO] Atalho nao criado.
+if exist "%SETUP_DIR%\criar_atalho.py" (
+    "%VENV_PY%" "%SETUP_DIR%\criar_atalho.py"
 ) else (
-    echo  [OK] Atalho criado na area de trabalho.
+    echo  [AVISO] Script de atalho nao encontrado.
 )
 echo.
 
-echo  +======================================================+
-if "%ERROS%"=="0" (
-    echo  ^|   [OK] Instalacao concluida com sucesso!            ^|
+if "%ERROS%"=="1" (
+    echo  +======================================================+
+    echo  ^|   Instalacao concluida com avisos.                  ^|
+    echo  ^|   O Rony pode funcionar parcialmente.               ^|
+    echo  +======================================================+
 ) else (
-    echo  ^|   [OK] Instalacao concluida com avisos.             ^|
+    echo  +======================================================+
+    echo  ^|   Rony instalado com sucesso!                       ^|
+    echo  +======================================================+
 )
-echo  +======================================================+
+
 echo.
-echo  Como iniciar o Rony:
-echo    - Clique duas vezes em: INICIAR_RONY.bat
-echo    - Ou use o atalho na area de trabalho, se criado
+echo  Para iniciar:
+echo    INICIAR_RONY.bat
 echo.
-pause
 exit /b 0
 
 :find_python
@@ -152,3 +151,4 @@ if errorlevel 1 (
     exit /b 1
 )
 exit /b 0
+
