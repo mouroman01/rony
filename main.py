@@ -150,6 +150,9 @@ GROQ_KEY      = os.getenv("GROQ_API_KEY", "")
 ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 GROK_KEY      = os.getenv("XAI_API_KEY", "")
 
+# ── Cache índice do microfone (evita chamar pyaudio a cada loop) ─
+_mic_index_cache: int | None = -1   # -1 = ainda não detectado
+
 # ── WebSocket ─────────────────────────────────────────────────
 WS_PORT          = 8765
 LAN_HOST         = "0.0.0.0"
@@ -548,6 +551,10 @@ builtins.parler = parler
 # ═══════════════════════════════════════════════════════════════
 
 def _charger_config_micro() -> int | None:
+    global _mic_index_cache
+    # Retorna cache se já detectado nesta sessão
+    if _mic_index_cache != -1:
+        return _mic_index_cache
     # Lê da AppData primeiro, fallback para pasta do programa
     for config_path in [_CONFIG_FILE, RONY_DIR / "rony_config.json"]:
         try:
@@ -555,11 +562,13 @@ def _charger_config_micro() -> int | None:
                 data = json.loads(config_path.read_text(encoding="utf-8"))
                 idx = data.get("mic_device_index", None)
                 if idx is not None:
+                    _mic_index_cache = idx
                     return idx
         except Exception:
             pass
     # Sem índice salvo: detecta automaticamente e salva
-    return _autodetectar_microfone()
+    _mic_index_cache = _autodetectar_microfone()
+    return _mic_index_cache
 
 
 def _autodetectar_microfone() -> int | None:
@@ -1962,6 +1971,10 @@ async def boucle_ecoute() -> None:
             # ── MODE VEILLE : chercher le wake word ───────────
             if not _modo_ativo:
                 texte = await ecouter_wake_word()
+                if not texte:
+                    # Pequena pausa para não sobrecarregar CPU em falhas rápidas
+                    await asyncio.sleep(0.5)
+                    continue
                 if texte:
                     print(f"[VEILLE] Entendu : '{texte}'")
                     # Permite ativar realtime mesmo em veille
