@@ -1,5 +1,6 @@
 name: Build and publish Rony updater
 
+# Touch this workflow when a GitHub Actions-authored source commit needs a release build.
 on:
   push:
     branches:
