@@ -9,6 +9,9 @@ on:
 permissions:
   contents: write
 
+env:
+  PYTHONIOENCODING: utf-8
+
 jobs:
   apply-ar-interface:
     runs-on: windows-latest
@@ -27,12 +30,444 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      - name: Apply patch
+      - name: Apply AR source patch
         shell: pwsh
         run: |
-          $patch64 = 'ZGlmZiAtLWdpdCBhL2Zyb250ZW5kL2luZGV4Lmh0bWwgYi9mcm9udGVuZC9pbmRleC5odG1sIGluZGV4IDY0MjdjYzcuLjYxYWRlYjYgMTAwNjQ0IC0tLSBhL2Zyb250ZW5kL2luZGV4Lmh0bWwgKysrIGIvZnJvbnRlbmQvaW5kZXguaHRtbCBAQCAtMzEsNiArMzEsMTYgQEAgICAgICA8cCBpZD0ic3VidGl0bGUtdGV4dCI+PC9wPiAgICA8L2Rpdj4gICArICA8IS0tIFJlYWxpZGFkZSBhdW1lbnRhZGEgLS0+ICsgIDxkaXYgaWQ9ImFyLXBhbmVsIiBjbGFzcz0iYXItcGFuZWwgaGlkZGVuIj4gKyAgICA8dmlkZW8gaWQ9ImFyLXZpZGVvIiBwbGF5c2lubGluZSBtdXRlZD48L3ZpZGVvPiArICAgIDxjYW52YXMgaWQ9ImFyLW92ZXJsYXkiPjwvY2FudmFzPiArICAgIDxkaXYgY2xhc3M9ImFyLXRvcGJhciI+ICsgICAgICA8c3BhbiBpZD0iYXItc3RhdHVzIj5BUjwvc3Bhbj4gKyAgICAgIDxidXR0b24gaWQ9ImFyLWNsb3NlIiBjbGFzcz0iYXItY2xvc2UiIHR5cGU9ImJ1dHRvbiIgdGl0bGU9IkZlY2hhciByZWFsaWRhZGUgYXVtZW50YWRhIj54PC9idXR0b24+ICsgICAgPC9kaXY+ICsgIDwvZGl2PiArICAgIDwhLS0gRXJyZXVyIC0tPiAgICA8ZGl2IGlkPSJlcnJvci10ZXh0IiBjbGFzcz0iZXJyb3ItdGV4dCI+PC9kaXY+ICAgQEAgLTM5LDYgKzQ5LDcgQEAgICAgICA8YnV0dG9uIGlkPSJtdXRlLWJ1dHRvbiIgICAgIGNsYXNzPSJjdHJsLWJ0biIgdGl0bGU9Ik11dGUgLyBVbm11dGUiPm11dGU8L2J1dHRvbj4gICAgICA8YnV0dG9uIGlkPSJyZWFsdGltZS1idXR0b24iIGNsYXNzPSJjdHJsLWJ0biIgdGl0bGU9IlJlYWx0aW1lIHZvaWNlIj5yZWFsdGltZTwvYnV0dG9uPiAgICAgIDxidXR0b24gaWQ9Im1vYmlsZS1idXR0b24iICAgY2xhc3M9ImN0cmwtYnRuIiB0aXRsZT0iQWNlc3NvIHBlbG8gY2VsdWxhciI+Y2VsdWxhcjwvYnV0dG9uPiArICAgIDxidXR0b24gaWQ9ImFyLWJ1dHRvbiIgICAgICAgY2xhc3M9ImN0cmwtYnRuIiB0aXRsZT0iUmVhbGlkYWRlIGF1bWVudGFkYSI+QVI8L2J1dHRvbj4gICAgICA8YnV0dG9uIGlkPSJjYXB0dXJlLWJ1dHRvbiIgIGNsYXNzPSJjdHJsLWJ0biIgdGl0bGU9IlNjcmVlbnNob3QiPvCfk7c8L2J1dHRvbj4gICAgICA8YnV0dG9uIGlkPSJrZXlib2FyZC10b2dnbGUiIGNsYXNzPSJjdHJsLWJ0biIgdGl0bGU9IktleWJvYXJkIj7ijKg8L2J1dHRvbj4gICAgICA8YnV0dG9uIGlkPSJoZWxwLXRvZ2dsZSIgICAgIGNsYXNzPSJjdHJsLWJ0biIgdGl0bGU9IkhlbHAiPj88L2J1dHRvbj4gZGlmZiAtLWdpdCBhL2Zyb250ZW5kL3NyYy9tYWluLnRzIGIvZnJvbnRlbmQvc3JjL21haW4udHMgaW5kZXggMThlZmVjMi4uMGVmMjZjYyAxMDA2NDQgLS0tIGEvZnJvbnRlbmQvc3JjL21haW4udHMgKysrIGIvZnJvbnRlbmQvc3JjL21haW4udHMgQEAgLTM2LDYgKzM2LDEyIEBAIGNvbnN0IGxhbmdNb2RhbCAgICAgICA9IGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCJsYW5nLW1vZGFsIikgICAgICAgIGFzIEhUTUxEaXZFICBjb25zdCBsYW5nQ2xvc2UgICAgICAgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgibGFuZy1jbG9zZSIpICAgICAgICBhcyBIVE1MQnV0dG9uRWxlbWVudDsgIGNvbnN0IGxhbmdMaXN0ICAgICAgICA9IGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCJsYW5nLWxpc3QiKSAgICAgICAgIGFzIEhUTUxEaXZFbGVtZW50OyAgY29uc3QgcmVhbHRpbWVCdG4gICAgID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoInJlYWx0aW1lLWJ1dHRvbiIpICAgYXMgSFRNTEJ1dHRvbkVsZW1lbnQ7ICtjb25zdCBhckJ0biAgICAgICAgICAgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgiYXItYnV0dG9uIikgICAgICAgICBhcyBIVE1MQnV0dG9uRWxlbWVudDsgK2NvbnN0IGFyUGFuZWwgICAgICAgICA9IGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCJhci1wYW5lbCIpICAgICAgICAgIGFzIEhUTUxEaXZFbGVtZW50OyArY29uc3QgYXJWaWRlbyAgICAgICAgID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoImFyLXZpZGVvIikgICAgICAgICAgYXMgSFRNTFZpZGVvRWxlbWVudDsgK2NvbnN0IGFyT3ZlcmxheSAgICAgICA9IGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCJhci1vdmVybGF5IikgICAgICAgIGFzIEhUTUxDYW52YXNFbGVtZW50OyArY29uc3QgYXJTdGF0dXMgICAgICAgID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoImFyLXN0YXR1cyIpICAgICAgICAgYXMgSFRNTFNwYW5FbGVtZW50OyArY29uc3QgYXJDbG9zZSAgICAgICAgID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoImFyLWNsb3NlIikgICAgICAgICAgYXMgSFRNTEJ1dHRvbkVsZW1lbnQ7ICBjb25zdCBtb2JpbGVNb2RhbCAgICAgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgibW9iaWxlLW1vZGFsIikgICAgICBhcyBIVE1MRGl2RWxlbWVudDsgIGNvbnN0IG1vYmlsZUNsb3NlICAgICA9IGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKCJtb2JpbGUtY2xvc2UiKSAgICAgIGFzIEhUTUxCdXR0b25FbGVtZW50OyAgY29uc3QgbW9iaWxlVXJsQnRuICAgID0gZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoIm1vYmlsZS11cmwiKSAgICAgICAgYXMgSFRNTEJ1dHRvbkVsZW1lbnQ7IEBAIC0xMzYsNiArMTQyLDIxIEBAIGxldCByZWFsdGltZURjOiBSVENEYXRhQ2hhbm5lbCB8IG51bGwgPSBudWxsOyAgbGV0IHJlYWx0aW1lU3RyZWFtOiBNZWRpYVN0cmVhbSB8IG51bGwgPSBudWxsOyAgbGV0IHJlYWx0aW1lQXVkaW86IEhUTUxBdWRpb0VsZW1lbnQgfCBudWxsID0gbnVsbDsgIGxldCByZWFsdGltZUFjdGl2ZSA9IGZhbHNlOyArbGV0IGFyU3RyZWFtOiBNZWRpYVN0cmVhbSB8IG51bGwgPSBudWxsOyArbGV0IGFyQWN0aXZlID0gZmFsc2U7ICtsZXQgYXJCdXN5ID0gZmFsc2U7ICtsZXQgYXJUaW1lcjogbnVtYmVyIHwgbnVsbCA9IG51bGw7ICsgK3R5cGUgQXJCb3ggPSB7ICsgIGxhYmVsPzogc3RyaW5nOyArICBvYmpldG8/OiBzdHJpbmc7ICsgIGNvbmZpZGVuY2U/OiBudW1iZXIgfCBudWxsOyArICBjb25maWFuY2E/OiBudW1iZXIgfCBudWxsOyArICB4OiBudW1iZXI7ICsgIHk6IG51bWJlcjsgKyAgbGFyZ3VyYTogbnVtYmVyOyArICBhbHR1cmE6IG51bWJlcjsgK307ICAgIGZ1bmN0aW9uIHNlbmRSZWFsdGltZUV2ZW50KHBheWxvYWQ6IG9iamVjdCk6IHZvaWQgeyAgICBpZiAocmVhbHRpbWVEYyAmJiByZWFsdGltZURjLnJlYWR5U3RhdGUgPT09ICJvcGVuIikgeyBAQCAtMjI2LDYgKzI0NywxNCBAQCBmdW5jdGlvbiBoYW5kbGVNZXNzYWdlKGRhdGE6IFJlY29yZDxzdHJpbmcsIHVua25vd24+KTogdm9pZCB7ICAgICAgICApOyAgICAgICAgYnJlYWs7ICAgKyAgICBjYXNlICJhcl9tb2RlIjogKyAgICAgIGlmIChkYXRhLmVuYWJsZWQpIHsgKyAgICAgICAgdm9pZCBzdGFydEFyTW9kZSgpOyArICAgICAgfSBlbHNlIHsgKyAgICAgICAgc3RvcEFyTW9kZSgpOyArICAgICAgfSArICAgICAgYnJlYWs7ICsgICAgICBjYXNlICJwb25nIjogICAgICAgIGJyZWFrOyAgICB9IEBAIC0zNTcsNiArMzg2LDE0MCBAQCBmdW5jdGlvbiB0b2dnbGVLZXlib2FyZChzaG93PzogYm9vbGVhbik6IHZvaWQgeyAgICBpZiAoc2hvd0tleWJvYXJkKSBrZXlib2FyZElucHV0LmZvY3VzKCk7ICB9ICAgK2Z1bmN0aW9uIHJlc2l6ZUFyT3ZlcmxheSgpOiB2b2lkIHsgKyAgY29uc3QgcmVjdCA9IGFyVmlkZW8uZ2V0Qm91bmRpbmdDbGllbnRSZWN0KCk7ICsgIGNvbnN0IHJhdGlvID0gd2luZG93LmRldmljZVBpeGVsUmF0aW8gfHwgMTsgKyAgYXJPdmVybGF5LndpZHRoID0gTWF0aC5tYXgoMSwgTWF0aC5yb3VuZChyZWN0LndpZHRoICogcmF0aW8pKTsgKyAgYXJPdmVybGF5LmhlaWdodCA9IE1hdGgubWF4KDEsIE1hdGgucm91bmQocmVjdC5oZWlnaHQgKiByYXRpbykpOyArICBhck92ZXJsYXkuc3R5bGUud2lkdGggPSBgJHtyZWN0LndpZHRofXB4YDsgKyAgYXJPdmVybGF5LnN0eWxlLmhlaWdodCA9IGAke3JlY3QuaGVpZ2h0fXB4YDsgK30gKyArZnVuY3Rpb24gZHJhd0FyQm94ZXMoZmFjZXM6IEFyQm94W10sIG9iamVjdHM6IEFyQm94W10sIHNvdXJjZVdpZHRoOiBudW1iZXIsIHNvdXJjZUhlaWdodDogbnVtYmVyKTogdm9pZCB7ICsgIHJlc2l6ZUFyT3ZlcmxheSgpOyArICBjb25zdCBjdHggPSBhck92ZXJsYXkuZ2V0Q29udGV4dCgiMmQiKTsgKyAgaWYgKCFjdHgpIHJldHVybjsgKyArICBjb25zdCByYXRpbyA9IHdpbmRvdy5kZXZpY2VQaXhlbFJhdGlvIHx8IDE7ICsgIGN0eC5zZXRUcmFuc2Zvcm0ocmF0aW8sIDAsIDAsIHJhdGlvLCAwLCAwKTsgKyAgY3R4LmNsZWFyUmVjdCgwLCAwLCBhck92ZXJsYXkud2lkdGgsIGFyT3ZlcmxheS5oZWlnaHQpOyArICsgIGNvbnN0IHJlY3QgPSBhclZpZGVvLmdldEJvdW5kaW5nQ2xpZW50UmVjdCgpOyArICBjb25zdCBzY2FsZSA9IE1hdGgubWluKHJlY3Qud2lkdGggLyBzb3VyY2VXaWR0aCwgcmVjdC5oZWlnaHQgLyBzb3VyY2VIZWlnaHQpOyArICBjb25zdCByZW5kZXJlZFcgPSBzb3VyY2VXaWR0aCAqIHNjYWxlOyArICBjb25zdCByZW5kZXJlZEggPSBzb3VyY2VIZWlnaHQgKiBzY2FsZTsgKyAgY29uc3Qgb2Zmc2V0WCA9IChyZWN0LndpZHRoIC0gcmVuZGVyZWRXKSAvIDI7ICsgIGNvbnN0IG9mZnNldFkgPSAocmVjdC5oZWlnaHQgLSByZW5kZXJlZEgpIC8gMjsgKyArICBjb25zdCBkcmF3ID0gKGJveDogQXJCb3gsIGNvbG9yOiBzdHJpbmcsIGZhbGxiYWNrOiBzdHJpbmcpID0+IHsgKyAgICBjb25zdCB4ID0gb2Zmc2V0WCArIGJveC54ICogc2NhbGU7ICsgICAgY29uc3QgeSA9IG9mZnNldFkgKyBib3gueSAqIHNjYWxlOyArICAgIGNvbnN0IHcgPSBib3gubGFyZ3VyYSAqIHNjYWxlOyArICAgIGNvbnN0IGggPSBib3guYWx0dXJhICogc2NhbGU7ICsgICAgY29uc3QgbGFiZWwgPSBib3gubGFiZWwgfHwgYm94Lm9iamV0byB8fCBmYWxsYmFjazsgKyAgICBjb25zdCBzY29yZSA9IGJveC5jb25maWFuY2EgPz8gYm94LmNvbmZpZGVuY2U7ICsgICAgY29uc3QgdGV4dCA9IHNjb3JlID8gYCR7bGFiZWx9ICR7TWF0aC5yb3VuZChzY29yZSAqIDEwMCl9JWAgOiBsYWJlbDsgKyArICAgIGN0eC5zdHJva2VTdHlsZSA9IGNvbG9yOyArICAgIGN0eC5saW5lV2lkdGggPSAyOyArICAgIGN0eC5zdHJva2VSZWN0KHgsIHksIHcsIGgpOyArICsgICAgY3R4LmZvbnQgPSAiMTJweCBJbnRlciwgU2Vnb2UgVUksIHNhbnMtc2VyaWYiOyArICAgIGNvbnN0IHRleHRXID0gY3R4Lm1lYXN1cmVUZXh0KHRleHQpLndpZHRoICsgMTI7ICsgICAgY29uc3QgdGV4dEggPSAyMjsgKyAgICBjdHguZmlsbFN0eWxlID0gY29sb3I7ICsgICAgY3R4LmZpbGxSZWN0KHgsIE1hdGgubWF4KDAsIHkgLSB0ZXh0SCksIHRleHRXLCB0ZXh0SCk7ICsgICAgY3R4LmZpbGxTdHlsZSA9ICIjMDQxMDE2IjsgKyAgICBjdHguZmlsbFRleHQodGV4dCwgeCArIDYsIE1hdGgubWF4KDE0LCB5IC0gNykpOyArICB9OyArICsgIG9iamVjdHMuZm9yRWFjaCgoYm94KSA9PiBkcmF3KGJveCwgInJnYmEoNiwgMTgyLCAyMTIsIDAuOTUpIiwgIm9iamV0byIpKTsgKyAgZmFjZXMuZm9yRWFjaCgoYm94KSA9PiBkcmF3KGJveCwgInJnYmEoMzQsIDE5NywgOTQsIDAuOTUpIiwgInJvc3RvIikpOyArICBhclN0YXR1cy50ZXh0Q29udGVudCA9IGAke2ZhY2VzLmxlbmd0aH0gcm9zdG8ocykgwrcgJHtvYmplY3RzLmxlbmd0aH0gb2JqZXRvKHMpYDsgK30gKyArYXN5bmMgZnVuY3Rpb24gYW5hbHl6ZUFyRnJhbWUoKTogUHJvbWlzZTx2b2lkPiB7ICsgIGlmICghYXJBY3RpdmUgfHwgYXJCdXN5IHx8IGFyVmlkZW8ucmVhZHlTdGF0ZSA8IDIpIHJldHVybjsgKyAgYXJCdXN5ID0gdHJ1ZTsgKyAgdHJ5IHsgKyAgICBjb25zdCBzb3VyY2VXaWR0aCA9IGFyVmlkZW8udmlkZW9XaWR0aCB8fCA2NDA7ICsgICAgY29uc3Qgc291cmNlSGVpZ2h0ID0gYXJWaWRlby52aWRlb0hlaWdodCB8fCAzNjA7ICsgICAgY29uc3QgdGFyZ2V0V2lkdGggPSA2NDA7ICsgICAgY29uc3QgdGFyZ2V0SGVpZ2h0ID0gTWF0aC5tYXgoMSwgTWF0aC5yb3VuZChzb3VyY2VIZWlnaHQgKiAodGFyZ2V0V2lkdGggLyBzb3VyY2VXaWR0aCkpKTsgKyAgICBjb25zdCBmcmFtZUNhbnZhcyA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoImNhbnZhcyIpOyArICAgIGZyYW1lQ2FudmFzLndpZHRoID0gdGFyZ2V0V2lkdGg7ICsgICAgZnJhbWVDYW52YXMuaGVpZ2h0ID0gdGFyZ2V0SGVpZ2h0OyArICAgIGNvbnN0IGZyYW1lQ3R4ID0gZnJhbWVDYW52YXMuZ2V0Q29udGV4dCgiMmQiKTsgKyAgICBpZiAoIWZyYW1lQ3R4KSByZXR1cm47ICsgKyAgICBmcmFtZUN0eC5kcmF3SW1hZ2UoYXJWaWRlbywgMCwgMCwgdGFyZ2V0V2lkdGgsIHRhcmdldEhlaWdodCk7ICsgICAgY29uc3QgaW1hZ2VfYjY0ID0gZnJhbWVDYW52YXMudG9EYXRhVVJMKCJpbWFnZS9qcGVnIiwgMC43Mik7ICsgICAgY29uc3QgcmVzcG9uc2UgPSBhd2FpdCBmZXRjaCgiL2FwaS9hci1mcmFtZSIsIHsgKyAgICAgIG1ldGhvZDogIlBPU1QiLCArICAgICAgaGVhZGVyczogeyAiQ29udGVudC1UeXBlIjogImFwcGxpY2F0aW9uL2pzb24iIH0sICsgICAgICBib2R5OiBKU09OLnN0cmluZ2lmeSh7IGltYWdlX2I2NCwgbGFuZ3VlOiBjdXJyZW50TGFuZyB9KSwgKyAgICB9KTsgKyAgICBjb25zdCBkYXRhID0gYXdhaXQgcmVzcG9uc2UuanNvbigpOyArICAgIGlmICghcmVzcG9uc2Uub2sgfHwgIWRhdGEub2spIHsgKyAgICAgIGFyU3RhdHVzLnRleHRDb250ZW50ID0gZGF0YS5lcnJvciB8fCAiQVIgaW5kaXNwb25pdmVsIjsgKyAgICAgIHJldHVybjsgKyAgICB9ICsgICAgZHJhd0FyQm94ZXMoZGF0YS5mYWNlcyB8fCBbXSwgZGF0YS5vYmplY3RzIHx8IFtdLCB0YXJnZXRXaWR0aCwgdGFyZ2V0SGVpZ2h0KTsgKyAgfSBjYXRjaCAoXykgeyArICAgIGFyU3RhdHVzLnRleHRDb250ZW50ID0gIkFSIGluZGlzcG9uaXZlbCI7ICsgIH0gZmluYWxseSB7ICsgICAgYXJCdXN5ID0gZmFsc2U7ICsgIH0gK30gKyArYXN5bmMgZnVuY3Rpb24gc3RhcnRBck1vZGUoKTogUHJvbWlzZTx2b2lkPiB7ICsgIGlmIChhckFjdGl2ZSkgcmV0dXJuOyArICBpZiAoIW5hdmlnYXRvci5tZWRpYURldmljZXM/LmdldFVzZXJNZWRpYSkgeyArICAgIGVycm9yRWwudGV4dENvbnRlbnQgPSAiQ2FtZXJhIGluZGlzcG9uaXZlbCBuZXN0YSBpbnRlcmZhY2UuIjsgKyAgICByZXR1cm47ICsgIH0gKyArICB0cnkgeyArICAgIGVycm9yRWwudGV4dENvbnRlbnQgPSAiIjsgKyAgICBhclN0YXR1cy50ZXh0Q29udGVudCA9ICJpbmljaWFuZG8gY2FtZXJhLi4uIjsgKyAgICBhclBhbmVsLmNsYXNzTGlzdC5yZW1vdmUoImhpZGRlbiIpOyArICAgIGFyQnRuLmNsYXNzTGlzdC5hZGQoImlzLXJlYWx0aW1lIik7ICsgICAgYXJTdHJlYW0gPSBhd2FpdCBuYXZpZ2F0b3IubWVkaWFEZXZpY2VzLmdldFVzZXJNZWRpYSh7ICsgICAgICB2aWRlbzogeyBmYWNpbmdNb2RlOiAiZW52aXJvbm1lbnQiLCB3aWR0aDogeyBpZGVhbDogMTI4MCB9LCBoZWlnaHQ6IHsgaWRlYWw6IDcyMCB9IH0sICsgICAgICBhdWRpbzogZmFsc2UsICsgICAgfSk7ICsgICAgYXJWaWRlby5zcmNPYmplY3QgPSBhclN0cmVhbTsgKyAgICBhd2FpdCBhclZpZGVvLnBsYXkoKTsgKyAgICBhckFjdGl2ZSA9IHRydWU7ICsgICAgYXJTdGF0dXMudGV4dENvbnRlbnQgPSAiYW5hbGlzYW5kby4uLiI7ICsgICAgcmVzaXplQXJPdmVybGF5KCk7ICsgICAgYXdhaXQgYW5hbHl6ZUFyRnJhbWUoKTsgKyAgICBhclRpbWVyID0gd2luZG93LnNldEludGVydmFsKCgpID0+IHsgdm9pZCBhbmFseXplQXJGcmFtZSgpOyB9LCA5MDApOyArICB9IGNhdGNoIChlcnJvcikgeyArICAgIHN0b3BBck1vZGUoKTsgKyAgICBlcnJvckVsLnRleHRDb250ZW50ID0gZXJyb3IgaW5zdGFuY2VvZiBFcnJvciAmJiBlcnJvci5uYW1lID09PSAiTm90QWxsb3dlZEVycm9yIiArICAgICAgPyAiUGVybWl0YSBvIGFjZXNzbyBhIGNhbWVyYSBwYXJhIHVzYXIgYSByZWFsaWRhZGUgYXVtZW50YWRhLiIgKyAgICAgIDogIk5hbyBjb25zZWd1aSBpbmljaWFyIGEgcmVhbGlkYWRlIGF1bWVudGFkYS4iOyArICB9ICt9ICsgK2Z1bmN0aW9uIHN0b3BBck1vZGUoKTogdm9pZCB7ICsgIGlmIChhclRpbWVyICE9PSBudWxsKSB7ICsgICAgd2luZG93LmNsZWFySW50ZXJ2YWwoYXJUaW1lcik7ICsgICAgYXJUaW1lciA9IG51bGw7ICsgIH0gKyAgYXJTdHJlYW0/LmdldFRyYWNrcygpLmZvckVhY2goKHRyYWNrKSA9PiB0cmFjay5zdG9wKCkpOyArICBhclN0cmVhbSA9IG51bGw7ICsgIGFyVmlkZW8ucGF1c2UoKTsgKyAgYXJWaWRlby5zcmNPYmplY3QgPSBudWxsOyArICBhckFjdGl2ZSA9IGZhbHNlOyArICBhckJ1c3kgPSBmYWxzZTsgKyAgYXJQYW5lbC5jbGFzc0xpc3QuYWRkKCJoaWRkZW4iKTsgKyAgYXJCdG4uY2xhc3NMaXN0LnJlbW92ZSgiaXMtcmVhbHRpbWUiKTsgKyAgY29uc3QgY3R4ID0gYXJPdmVybGF5LmdldENvbnRleHQoIjJkIik7ICsgIGN0eD8uY2xlYXJSZWN0KDAsIDAsIGFyT3ZlcmxheS53aWR0aCwgYXJPdmVybGF5LmhlaWdodCk7ICt9ICsgIC8vIOKUgOKUgCDDiXbDqW5lbWVudHMgYm91dG9ucyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgIGZ1bmN0aW9uIHNldFJlYWx0aW1lQWN0aXZlKGFjdGl2ZTogYm9vbGVhbik6IHZvaWQgeyAgICByZWFsdGltZUFjdGl2ZSA9IGFjdGl2ZTsgQEAgLTUyNCw2ICs2ODcsMTIgQEAgcmVhbHRpbWVCdG4ub25jbGljayA9ICgpID0+IHsgICAgc3RhcnRSZWFsdGltZSgpOyAgfTsgICArYXJCdG4ub25jbGljayA9ICgpID0+IHsgKyAgaWYgKGFyQWN0aXZlKSBzdG9wQXJNb2RlKCk7ICsgIGVsc2Ugdm9pZCBzdGFydEFyTW9kZSgpOyArfTsgK2FyQ2xvc2Uub25jbGljayA9ICgpID0+IHN0b3BBck1vZGUoKTsgKyAga2V5Ym9hcmRUb2dnbGUub25jbGljayA9ICgpID0+IHRvZ2dsZUtleWJvYXJkKCk7ICBoZWxwVG9nZ2xlLm9uY2xpY2sgICAgID0gKCkgPT4gdG9nZ2xlSGVscCgpOyAgaGVscENsb3NlLm9uY2xpY2sgICAgICA9ICgpID0+IHRvZ2dsZUhlbHAoZmFsc2UpOyBAQCAtNTcxLDYgKzc0MCw3IEBAIGRvY3VtZW50LmFkZEV2ZW50TGlzdGVuZXIoImtleWRvd24iLCAoZSkgPT4geyAgICAgIHRvZ2dsZUxhbmdNb2RhbChmYWxzZSk7ICAgICAgdm9pZCB0b2dnbGVNb2JpbGVNb2RhbChmYWxzZSk7ICAgICAgdG9nZ2xlS2V5Ym9hcmQoZmFsc2UpOyArICAgIHN0b3BBck1vZGUoKTsgICAgfSAgICBpZiAoKGUuY3RybEtleSB8fCBlLm1ldGFLZXkpICYmIGUua2V5ID09PSAiayIpIHsgICAgICBlLnByZXZlbnREZWZhdWx0KCk7IEBAIC01ODMsMTEgKzc1MywxNiBAQCBkb2N1bWVudC5hZGRFdmVudExpc3RlbmVyKCJrZXlkb3duIiwgKGUpID0+IHsgIH0pOyAgICAvLyDilIDilIAgQm9vdCDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgK3dpbmRvdy5hZGRFdmVudExpc3RlbmVyKCJyZXNpemUiLCAoKSA9PiB7ICsgIGlmIChhckFjdGl2ZSkgcmVzaXplQXJPdmVybGF5KCk7ICt9KTsgKyAgc3VidGl0bGVCb3guY2xhc3NMaXN0LmFkZCgiaGlkZGVuIik7ICBrZXlib2FyZEh1ZC5jbGFzc0xpc3QuYWRkKCJoaWRkZW4iKTsgIGhlbHBPdmVybGF5LmNsYXNzTGlzdC5hZGQoImhpZGRlbiIpOyAgbGFuZ01vZGFsLmNsYXNzTGlzdC5hZGQoImhpZGRlbiIpOyAgbW9iaWxlTW9kYWwuY2xhc3NMaXN0LmFkZCgiaGlkZGVuIik7ICthclBhbmVsLmNsYXNzTGlzdC5hZGQoImhpZGRlbiIpOyAgICAvLyBFc3RhZG8gaW5pY2lhbDogdmVpbGxlIChhZ3VhcmRhbmRvIHdha2Ugd29yZCkgIG9yYi5zZXRTdGF0ZSgidmVpbGxlIik7IGRpZmYgLS1naXQgYS9mcm9udGVuZC9zcmMvc3R5bGUuY3NzIGIvZnJvbnRlbmQvc3JjL3N0eWxlLmNzcyBpbmRleCA5NGFjNGM4Li42YjlkODdmIDEwMDY0NCAtLS0gYS9mcm9udGVuZC9zcmMvc3R5bGUuY3NzICsrKyBiL2Zyb250ZW5kL3NyYy9zdHlsZS5jc3MgQEAgLTEzMiw2ICsxMzIsNjIgQEAgaHRtbCwgYm9keSB7ICAgIGNvbG9yOiB2YXIoLS1jbHItdGV4dCk7ICB9ICAgKy8qIFJlYWxpZGFkZSBhdW1lbnRhZGEgKi8gKy5hci1wYW5lbCB7ICsgIHBvc2l0aW9uOiBmaXhlZDsgKyAgaW5zZXQ6IDA7ICsgIHotaW5kZXg6IDgwOyArICBiYWNrZ3JvdW5kOiAjMDIwNjE3OyArICBkaXNwbGF5OiBibG9jazsgK30gKy5hci1wYW5lbC5oaWRkZW4geyArICBvcGFjaXR5OiAwOyArICBwb2ludGVyLWV2ZW50czogbm9uZTsgK30gKyNhci12aWRlbywgKyNhci1vdmVybGF5IHsgKyAgcG9zaXRpb246IGFic29sdXRlOyArICBpbnNldDogMDsgKyAgd2lkdGg6IDEwMCU7ICsgIGhlaWdodDogMTAwJTsgK30gKyNhci12aWRlbyB7ICsgIG9iamVjdC1maXQ6IGNvbnRhaW47ICsgIGJhY2tncm91bmQ6ICMwMjA2MTc7ICt9ICsjYXItb3ZlcmxheSB7ICsgIHBvaW50ZXItZXZlbnRzOiBub25lOyArfSArLmFyLXRvcGJhciB7ICsgIHBvc2l0aW9uOiBhYnNvbHV0ZTsgKyAgdG9wOiAxOHB4OyArICByaWdodDogMThweDsgKyAgZGlzcGxheTogZmxleDsgKyAgYWxpZ24taXRlbXM6IGNlbnRlcjsgKyAgZ2FwOiAxMHB4OyArICBwYWRkaW5nOiA3cHggMTBweDsgKyAgYm9yZGVyLXJhZGl1czogOHB4OyArICBib3JkZXI6IDFweCBzb2xpZCByZ2JhKDYsMTgyLDIxMiwwLjM1KTsgKyAgYmFja2dyb3VuZDogcmdiYSgyLDYsMjMsMC43Nik7ICsgIGNvbG9yOiByZ2JhKDI1NSwyNTUsMjU1LDAuOSk7ICsgIGZvbnQtc2l6ZTogMTJweDsgKyAgdGV4dC10cmFuc2Zvcm06IHVwcGVyY2FzZTsgKyAgei1pbmRleDogOTA7ICt9ICsuYXItY2xvc2UgeyArICB3aWR0aDogMjZweDsgKyAgaGVpZ2h0OiAyNnB4OyArICBib3JkZXI6IDFweCBzb2xpZCByZ2JhKDI1NSwyNTUsMjU1LDAuMTgpOyArICBib3JkZXItcmFkaXVzOiA2cHg7ICsgIGJhY2tncm91bmQ6IHJnYmEoMjU1LDI1NSwyNTUsMC4wOCk7ICsgIGNvbG9yOiByZ2JhKDI1NSwyNTUsMjU1LDAuOTIpOyArICBjdXJzb3I6IHBvaW50ZXI7ICt9ICsuYXItY2xvc2U6aG92ZXIgeyArICBib3JkZXItY29sb3I6IHJnYmEoMjQ4LDExMywxMTMsMC44KTsgKyAgY29sb3I6ICNmY2E1YTU7ICt9ICsgIC8qIOKUgOKUgCBFcnJldXIg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSAICovICAuZXJyb3ItdGV4dCB7ICAgIHBvc2l0aW9uOiBmaXhlZDsgZGlmZiAtLWdpdCBhL21haW4ucHkgYi9tYWluLnB5IGluZGV4IDc0YTMwY2QuLmYyODI1ZjYgMTAwNjQ0IC0tLSBhL21haW4ucHkgKysrIGIvbWFpbi5weSBAQCAtMTI0LDcgKzEyNCw3IEBAIGZyb20gY2FtZXJhX21vZHVsZSBpbXBvcnQgKCAgICAgIHZlcl9jYW1lcmEsIGNhcHR1cmFyX2Vfc2FsdmFyLCBhcHJlbmRlcl9yb3N0bywgICAgICByZXNwb3N0YV9vX3F1ZV92b2NlX3ZlLCByZXNwb3N0YV90ZW1fYWxndWVtLCByZXNwb3N0YV9vX3F1ZV9lX2lzc28sICAgICAgc3RhdHVzX2NhbWVyYSwgaW5pY2lhbGl6YXJfY2FtZXJhLCBkZXRlY3Rhcl9vYmpldG9zLCBjb250YXJfcm9zdG9zLCAtICAgIGNhcHR1cmFyX2NhbWVyYSwgKyAgICBjYXB0dXJhcl9jYW1lcmEsIGRldGVjdGFyX3Jvc3RvcywgcmVjb25oZWNlcl9yb3N0b3MsICApICBmcm9tIHNwZWNpYWxpc3RfbW9kdWxlIGltcG9ydCAoICAgICAgZGV0ZWN0YXJfbW9kbywgYXRpdmFyX21vZG8sIGRlc2F0aXZhcl9tb2RvLCBnZXRfbW9kb19hdHVhbCwgbW9kb19hdGl2bywgQEAgLTg3Nyw2ICs4NzcsMzAgQEAgYXN5bmMgZGVmIHRyYWl0ZXJfY29tbWFuZGVfc3lzdGVtZSh0ZXh0ZTogc3RyKSAtPiBib29sOiAgICAgICAgICBhd2FpdCBwYXJsZXIocmVzcG9zdGFfdmlzYW8pICAgICAgICAgIHJldHVybiBUcnVlICAgKyAgICBtb3RzX2FyX29uID0geyArICAgICAgICAicmVhbGlkYWRlIGF1bWVudGFkYSIsICJtb2RvIHJlYWxpZGFkZSBhdW1lbnRhZGEiLCAiYWJyaXIgcmVhbGlkYWRlIGF1bWVudGFkYSIsICsgICAgICAgICJhYnJlIHJlYWxpZGFkZSBhdW1lbnRhZGEiLCAibGlnYSByZWFsaWRhZGUgYXVtZW50YWRhIiwgImF0aXZhciByZWFsaWRhZGUgYXVtZW50YWRhIiwgKyAgICAgICAgImludGVyZmFjZSBkZSByZWFsaWRhZGUgYXVtZW50YWRhIiwgIm1vZG8gYXIiLCAiYWJyaXIgYXIiLCAibGlnYSBhciIsICsgICAgICAgICJhdWdtZW50ZWQgcmVhbGl0eSIsICJhciBtb2RlIiwgKyAgICB9ICsgICAgbW90c19hcl9vZmYgPSB7ICsgICAgICAgICJmZWNoYXIgcmVhbGlkYWRlIGF1bWVudGFkYSIsICJmZWNoYSByZWFsaWRhZGUgYXVtZW50YWRhIiwgImRlc2xpZ2FyIHJlYWxpZGFkZSBhdW1lbnRhZGEiLCArICAgICAgICAic2FpciBkYSByZWFsaWRhZGUgYXVtZW50YWRhIiwgInBhcmFyIHJlYWxpZGFkZSBhdW1lbnRhZGEiLCAiZmVjaGFyIGFyIiwgKyAgICAgICAgImRlc2xpZ2FyIGFyIiwgInN0b3AgYXIiLCAiY2xvc2UgYXIiLCArICAgIH0gKyAgICBpZiBhbnkobSBpbiB0IGZvciBtIGluIG1vdHNfYXJfb2ZmKTogKyAgICAgICAgaWYgQ09OTkVDVEVEX0NMSUVOVFM6ICsgICAgICAgICAgICBtc2cgPSBqc29uLmR1bXBzKHsiYWN0aW9uIjogImFyX21vZGUiLCAiZW5hYmxlZCI6IEZhbHNlfSkgKyAgICAgICAgICAgIGF3YWl0IGFzeW5jaW8uZ2F0aGVyKCpbd3Muc2VuZChtc2cpIGZvciB3cyBpbiBDT05ORUNURURfQ0xJRU5UU10sIHJldHVybl9leGNlcHRpb25zPVRydWUpICsgICAgICAgIGF3YWl0IHBhcmxlcigiRmVjaGVpIGEgcmVhbGlkYWRlIGF1bWVudGFkYS4iKSArICAgICAgICByZXR1cm4gVHJ1ZSArICAgIGlmIGFueShtIGluIHQgZm9yIG0gaW4gbW90c19hcl9vbik6ICsgICAgICAgIGlmIENPTk5FQ1RFRF9DTElFTlRTOiArICAgICAgICAgICAgbXNnID0ganNvbi5kdW1wcyh7ImFjdGlvbiI6ICJhcl9tb2RlIiwgImVuYWJsZWQiOiBUcnVlfSkgKyAgICAgICAgICAgIGF3YWl0IGFzeW5jaW8uZ2F0aGVyKCpbd3Muc2VuZChtc2cpIGZvciB3cyBpbiBDT05ORUNURURfQ0xJRU5UU10sIHJldHVybl9leGNlcHRpb25zPVRydWUpICsgICAgICAgIGF3YWl0IHBhcmxlcigiQWJyaW5kbyBhIHJlYWxpZGFkZSBhdW1lbnRhZGEuIikgKyAgICAgICAgcmV0dXJuIFRydWUgKyAgICAgICMg4pSA4pSAIE1vZG8gUmVhbHRpbWUg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSAICAgICAgaWYgYW55KG0gaW4gdCBmb3IgbSBpbiBfVFJJR0dFUlNfUkVBTFRJTUVfT04pOiAgICAgICAgICBhd2FpdCBfYXRpdmFyX21vZG9fcmVhbHRpbWUoKSBAQCAtMjI4MSwxNCArMjMwNSw1NCBAQCBkZWYgX2luaWNpYXJfc2Vydmlkb3JfZnJvbnRlbmQoKSAtPiBib29sOiAgICAgICAgICBkZWYgZG9fUE9TVChzZWxmKTogICAgICAgICAgICAgIGltcG9ydCB1cmxsaWIucGFyc2UgICAgICAgICAgICAgIHBhdGggPSB1cmxsaWIucGFyc2UudXJscGFyc2Uoc2VsZi5wYXRoKS5wYXRoIC0gICAgICAgICAgICBpZiBwYXRoICE9ICIvYXBpL3JlYWx0aW1lLXRvb2wiOiAtICAgICAgICAgICAgICAgIHNlbGYuc2VuZF9lcnJvcig0MDQpIC0gICAgICAgICAgICAgICAgcmV0dXJuICAgICAgICAgICAgICAgIHRyeTogICAgICAgICAgICAgICAgICBsZW5ndGggPSBpbnQoc2VsZi5oZWFkZXJzLmdldCgiQ29udGVudC1MZW5ndGgiLCAiMCIpKSAgICAgICAgICAgICAgICAgIHJhdyA9IHNlbGYucmZpbGUucmVhZChsZW5ndGgpLmRlY29kZSgidXRmLTgiKSAgICAgICAgICAgICAgICAgIHBheWxvYWQgPSBqc29uLmxvYWRzKHJhdyBvciAie30iKSArICsgICAgICAgICAgICAgICAgaWYgcGF0aCA9PSAiL2FwaS9hci1mcmFtZSI6ICsgICAgICAgICAgICAgICAgICAgIGltYWdlX2I2NCA9IHN0cihwYXlsb2FkLmdldCgiaW1hZ2VfYjY0IiwgIiIpKS5zdHJpcCgpICsgICAgICAgICAgICAgICAgICAgIGlmICIsIiBpbiBpbWFnZV9iNjQ6ICsgICAgICAgICAgICAgICAgICAgICAgICBpbWFnZV9iNjQgPSBpbWFnZV9iNjQuc3BsaXQoIiwiLCAxKVsxXSArICAgICAgICAgICAgICAgICAgICBpZiBub3QgaW1hZ2VfYjY0OiArICAgICAgICAgICAgICAgICAgICAgICAgc2VsZi5fc2VuZF9qc29uKDQwMCwgeyJvayI6IEZhbHNlLCAiZXJyb3IiOiAiRnJhbWUgYXVzZW50ZS4ifSkgKyAgICAgICAgICAgICAgICAgICAgICAgIHJldHVybiArICsgICAgICAgICAgICAgICAgICAgIHRyeTogKyAgICAgICAgICAgICAgICAgICAgICAgIGltZ19ieXRlcyA9IGJhc2U2NC5iNjRkZWNvZGUoaW1hZ2VfYjY0LCB2YWxpZGF0ZT1GYWxzZSkgKyAgICAgICAgICAgICAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbjogKyAgICAgICAgICAgICAgICAgICAgICAgIHNlbGYuX3NlbmRfanNvbig0MDAsIHsib2siOiBGYWxzZSwgImVycm9yIjogIkZyYW1lIGludmFsaWRvLiJ9KSArICAgICAgICAgICAgICAgICAgICAgICAgcmV0dXJuICsgKyAgICAgICAgICAgICAgICAgICAgbGluZ3VhID0gc3RyKHBheWxvYWQuZ2V0KCJsYW5ndWUiKSBvciBnZXRfbGFuZ3VlKCkgb3IgInB0IikgKyAgICAgICAgICAgICAgICAgICAgcm9zdG9zID0gZGV0ZWN0YXJfcm9zdG9zKGltZ19ieXRlcykgKyAgICAgICAgICAgICAgICAgICAgbm9tZXMgPSByZWNvbmhlY2VyX3Jvc3RvcyhpbWdfYnl0ZXMpIGlmIHJvc3RvcyBlbHNlIFtdICsgICAgICAgICAgICAgICAgICAgIHBlc3NvYXMgPSBbXSArICAgICAgICAgICAgICAgICAgICBmb3IgaWR4LCByb3N0byBpbiBlbnVtZXJhdGUocm9zdG9zKTogKyAgICAgICAgICAgICAgICAgICAgICAgIG5vbWUgPSBub21lc1tpZHhdIGlmIGlkeCA8IGxlbihub21lcykgZWxzZSAiZGVzY29uaGVjaWRvIiArICAgICAgICAgICAgICAgICAgICAgICAgcGVzc29hcy5hcHBlbmQoeyArICAgICAgICAgICAgICAgICAgICAgICAgICAgICJsYWJlbCI6IG5vbWUgaWYgbm9tZSAhPSAiZGVzY29uaGVjaWRvIiBlbHNlICJyb3N0byIsICsgICAgICAgICAgICAgICAgICAgICAgICAgICAgImNvbmZpZGVuY2UiOiBOb25lLCArICAgICAgICAgICAgICAgICAgICAgICAgICAgICoqcm9zdG8sICsgICAgICAgICAgICAgICAgICAgICAgICB9KSArICsgICAgICAgICAgICAgICAgICAgIG9iamV0b3MgPSBkZXRlY3Rhcl9vYmpldG9zKGltZ19ieXRlcywgbGluZ3VhPWxpbmd1YSkgKyAgICAgICAgICAgICAgICAgICAgc2VsZi5fc2VuZF9qc29uKDIwMCwgeyArICAgICAgICAgICAgICAgICAgICAgICAgIm9rIjogVHJ1ZSwgKyAgICAgICAgICAgICAgICAgICAgICAgICJmYWNlcyI6IHBlc3NvYXMsICsgICAgICAgICAgICAgICAgICAgICAgICAib2JqZWN0cyI6IG9iamV0b3NbOjIwXSwgKyAgICAgICAgICAgICAgICAgICAgICAgICJzdW1tYXJ5IjogeyArICAgICAgICAgICAgICAgICAgICAgICAgICAgICJmYWNlcyI6IGxlbihwZXNzb2FzKSwgKyAgICAgICAgICAgICAgICAgICAgICAgICAgICAib2JqZWN0cyI6IGxlbihvYmpldG9zKSwgKyAgICAgICAgICAgICAgICAgICAgICAgIH0sICsgICAgICAgICAgICAgICAgICAgIH0pICsgICAgICAgICAgICAgICAgICAgIHJldHVybiArICsgICAgICAgICAgICAgICAgaWYgcGF0aCAhPSAiL2FwaS9yZWFsdGltZS10b29sIjogKyAgICAgICAgICAgICAgICAgICAgc2VsZi5zZW5kX2Vycm9yKDQwNCkgKyAgICAgICAgICAgICAgICAgICAgcmV0dXJuICsgICAgICAgICAgICAgICAgICBjb21hbmRvID0gc3RyKHBheWxvYWQuZ2V0KCJjb21hbmRvIiwgIiIpKS5zdHJpcCgpICAgICAgICAgICAgICAgICAgaWYgbm90IGNvbWFuZG86ICAgICAgICAgICAgICAgICAgICAgIHNlbGYuX3NlbmRfanNvbig0MDAsIHsib2siOiBGYWxzZSwgInJlc3VsdGFkbyI6ICJDb21hbmRvIHZhemlvLiJ9KQ=='
-          [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($patch64)) | Set-Content -LiteralPath ar.patch -Encoding UTF8
-          git apply ar.patch
+          @'
+          diff --git a/frontend/index.html b/frontend/index.html
+          index 6427cc7..61adeb6 100644
+          --- a/frontend/index.html
+          +++ b/frontend/index.html
+          @@ -31,6 +31,16 @@
+               <p id="subtitle-text"></p>
+             </div>
+           
+          +  <!-- Realidade aumentada -->
+          +  <div id="ar-panel" class="ar-panel hidden">
+          +    <video id="ar-video" playsinline muted></video>
+          +    <canvas id="ar-overlay"></canvas>
+          +    <div class="ar-topbar">
+          +      <span id="ar-status">AR</span>
+          +      <button id="ar-close" class="ar-close" type="button" title="Fechar realidade aumentada">x</button>
+          +    </div>
+          +  </div>
+          +
+             <!-- Erreur -->
+             <div id="error-text" class="error-text"></div>
+           
+          @@ -39,6 +49,7 @@
+               <button id="mute-button"     class="ctrl-btn" title="Mute / Unmute">mute</button>
+               <button id="realtime-button" class="ctrl-btn" title="Realtime voice">realtime</button>
+               <button id="mobile-button"   class="ctrl-btn" title="Acesso pelo celular">celular</button>
+          +    <button id="ar-button"       class="ctrl-btn" title="Realidade aumentada">AR</button>
+               <button id="capture-button"  class="ctrl-btn" title="Screenshot">📷</button>
+               <button id="keyboard-toggle" class="ctrl-btn" title="Keyboard">⌨</button>
+               <button id="help-toggle"     class="ctrl-btn" title="Help">?</button>
+          diff --git a/frontend/src/main.ts b/frontend/src/main.ts
+          index 18efec2..0ef26cc 100644
+          --- a/frontend/src/main.ts
+          +++ b/frontend/src/main.ts
+          @@ -36,6 +36,12 @@ const langModal       = document.getElementById("lang-modal")        as HTMLDivE
+           const langClose       = document.getElementById("lang-close")        as HTMLButtonElement;
+           const langList        = document.getElementById("lang-list")         as HTMLDivElement;
+           const realtimeBtn     = document.getElementById("realtime-button")   as HTMLButtonElement;
+          +const arBtn           = document.getElementById("ar-button")         as HTMLButtonElement;
+          +const arPanel         = document.getElementById("ar-panel")          as HTMLDivElement;
+          +const arVideo         = document.getElementById("ar-video")          as HTMLVideoElement;
+          +const arOverlay       = document.getElementById("ar-overlay")        as HTMLCanvasElement;
+          +const arStatus        = document.getElementById("ar-status")         as HTMLSpanElement;
+          +const arClose         = document.getElementById("ar-close")          as HTMLButtonElement;
+           const mobileModal     = document.getElementById("mobile-modal")      as HTMLDivElement;
+           const mobileClose     = document.getElementById("mobile-close")      as HTMLButtonElement;
+           const mobileUrlBtn    = document.getElementById("mobile-url")        as HTMLButtonElement;
+          @@ -136,6 +142,21 @@ let realtimeDc: RTCDataChannel | null = null;
+           let realtimeStream: MediaStream | null = null;
+           let realtimeAudio: HTMLAudioElement | null = null;
+           let realtimeActive = false;
+          +let arStream: MediaStream | null = null;
+          +let arActive = false;
+          +let arBusy = false;
+          +let arTimer: number | null = null;
+          +
+          +type ArBox = {
+          +  label?: string;
+          +  objeto?: string;
+          +  confidence?: number | null;
+          +  confianca?: number | null;
+          +  x: number;
+          +  y: number;
+          +  largura: number;
+          +  altura: number;
+          +};
+           
+           function sendRealtimeEvent(payload: object): void {
+             if (realtimeDc && realtimeDc.readyState === "open") {
+          @@ -226,6 +247,14 @@ function handleMessage(data: Record<string, unknown>): void {
+               );
+               break;
+           
+          +    case "ar_mode":
+          +      if (data.enabled) {
+          +        void startArMode();
+          +      } else {
+          +        stopArMode();
+          +      }
+          +      break;
+          +
+             case "pong":
+               break;
+           }
+          @@ -357,6 +386,140 @@ function toggleKeyboard(show?: boolean): void {
+             if (showKeyboard) keyboardInput.focus();
+           }
+           
+          +function resizeArOverlay(): void {
+          +  const rect = arVideo.getBoundingClientRect();
+          +  const ratio = window.devicePixelRatio || 1;
+          +  arOverlay.width = Math.max(1, Math.round(rect.width * ratio));
+          +  arOverlay.height = Math.max(1, Math.round(rect.height * ratio));
+          +  arOverlay.style.width = `${rect.width}px`;
+          +  arOverlay.style.height = `${rect.height}px`;
+          +}
+          +
+          +function drawArBoxes(faces: ArBox[], objects: ArBox[], sourceWidth: number, sourceHeight: number): void {
+          +  resizeArOverlay();
+          +  const ctx = arOverlay.getContext("2d");
+          +  if (!ctx) return;
+          +
+          +  const ratio = window.devicePixelRatio || 1;
+          +  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+          +  ctx.clearRect(0, 0, arOverlay.width, arOverlay.height);
+          +
+          +  const rect = arVideo.getBoundingClientRect();
+          +  const scale = Math.min(rect.width / sourceWidth, rect.height / sourceHeight);
+          +  const renderedW = sourceWidth * scale;
+          +  const renderedH = sourceHeight * scale;
+          +  const offsetX = (rect.width - renderedW) / 2;
+          +  const offsetY = (rect.height - renderedH) / 2;
+          +
+          +  const draw = (box: ArBox, color: string, fallback: string) => {
+          +    const x = offsetX + box.x * scale;
+          +    const y = offsetY + box.y * scale;
+          +    const w = box.largura * scale;
+          +    const h = box.altura * scale;
+          +    const label = box.label || box.objeto || fallback;
+          +    const score = box.confianca ?? box.confidence;
+          +    const text = score ? `${label} ${Math.round(score * 100)}%` : label;
+          +
+          +    ctx.strokeStyle = color;
+          +    ctx.lineWidth = 2;
+          +    ctx.strokeRect(x, y, w, h);
+          +
+          +    ctx.font = "12px Inter, Segoe UI, sans-serif";
+          +    const textW = ctx.measureText(text).width + 12;
+          +    const textH = 22;
+          +    ctx.fillStyle = color;
+          +    ctx.fillRect(x, Math.max(0, y - textH), textW, textH);
+          +    ctx.fillStyle = "#041016";
+          +    ctx.fillText(text, x + 6, Math.max(14, y - 7));
+          +  };
+          +
+          +  objects.forEach((box) => draw(box, "rgba(6, 182, 212, 0.95)", "objeto"));
+          +  faces.forEach((box) => draw(box, "rgba(34, 197, 94, 0.95)", "rosto"));
+          +  arStatus.textContent = `${faces.length} rosto(s) · ${objects.length} objeto(s)`;
+          +}
+          +
+          +async function analyzeArFrame(): Promise<void> {
+          +  if (!arActive || arBusy || arVideo.readyState < 2) return;
+          +  arBusy = true;
+          +  try {
+          +    const sourceWidth = arVideo.videoWidth || 640;
+          +    const sourceHeight = arVideo.videoHeight || 360;
+          +    const targetWidth = 640;
+          +    const targetHeight = Math.max(1, Math.round(sourceHeight * (targetWidth / sourceWidth)));
+          +    const frameCanvas = document.createElement("canvas");
+          +    frameCanvas.width = targetWidth;
+          +    frameCanvas.height = targetHeight;
+          +    const frameCtx = frameCanvas.getContext("2d");
+          +    if (!frameCtx) return;
+          +
+          +    frameCtx.drawImage(arVideo, 0, 0, targetWidth, targetHeight);
+          +    const image_b64 = frameCanvas.toDataURL("image/jpeg", 0.72);
+          +    const response = await fetch("/api/ar-frame", {
+          +      method: "POST",
+          +      headers: { "Content-Type": "application/json" },
+          +      body: JSON.stringify({ image_b64, langue: currentLang }),
+          +    });
+          +    const data = await response.json();
+          +    if (!response.ok || !data.ok) {
+          +      arStatus.textContent = data.error || "AR indisponivel";
+          +      return;
+          +    }
+          +    drawArBoxes(data.faces || [], data.objects || [], targetWidth, targetHeight);
+          +  } catch (_) {
+          +    arStatus.textContent = "AR indisponivel";
+          +  } finally {
+          +    arBusy = false;
+          +  }
+          +}
+          +
+          +async function startArMode(): Promise<void> {
+          +  if (arActive) return;
+          +  if (!navigator.mediaDevices?.getUserMedia) {
+          +    errorEl.textContent = "Camera indisponivel nesta interface.";
+          +    return;
+          +  }
+          +
+          +  try {
+          +    errorEl.textContent = "";
+          +    arStatus.textContent = "iniciando camera...";
+          +    arPanel.classList.remove("hidden");
+          +    arBtn.classList.add("is-realtime");
+          +    arStream = await navigator.mediaDevices.getUserMedia({
+          +      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+          +      audio: false,
+          +    });
+          +    arVideo.srcObject = arStream;
+          +    await arVideo.play();
+          +    arActive = true;
+          +    arStatus.textContent = "analisando...";
+          +    resizeArOverlay();
+          +    await analyzeArFrame();
+          +    arTimer = window.setInterval(() => { void analyzeArFrame(); }, 900);
+          +  } catch (error) {
+          +    stopArMode();
+          +    errorEl.textContent = error instanceof Error && error.name === "NotAllowedError"
+          +      ? "Permita o acesso a camera para usar a realidade aumentada."
+          +      : "Nao consegui iniciar a realidade aumentada.";
+          +  }
+          +}
+          +
+          +function stopArMode(): void {
+          +  if (arTimer !== null) {
+          +    window.clearInterval(arTimer);
+          +    arTimer = null;
+          +  }
+          +  arStream?.getTracks().forEach((track) => track.stop());
+          +  arStream = null;
+          +  arVideo.pause();
+          +  arVideo.srcObject = null;
+          +  arActive = false;
+          +  arBusy = false;
+          +  arPanel.classList.add("hidden");
+          +  arBtn.classList.remove("is-realtime");
+          +  const ctx = arOverlay.getContext("2d");
+          +  ctx?.clearRect(0, 0, arOverlay.width, arOverlay.height);
+          +}
+          +
+           // ── Événements boutons ────────────────────────────────────────
+           function setRealtimeActive(active: boolean): void {
+             realtimeActive = active;
+          @@ -524,6 +687,12 @@ realtimeBtn.onclick = () => {
+             startRealtime();
+           };
+           
+          +arBtn.onclick = () => {
+          +  if (arActive) stopArMode();
+          +  else void startArMode();
+          +};
+          +arClose.onclick = () => stopArMode();
+          +
+           keyboardToggle.onclick = () => toggleKeyboard();
+           helpToggle.onclick     = () => toggleHelp();
+           helpClose.onclick      = () => toggleHelp(false);
+          @@ -571,6 +740,7 @@ document.addEventListener("keydown", (e) => {
+               toggleLangModal(false);
+               void toggleMobileModal(false);
+               toggleKeyboard(false);
+          +    stopArMode();
+             }
+             if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+               e.preventDefault();
+          @@ -583,11 +753,16 @@ document.addEventListener("keydown", (e) => {
+           });
+           
+           // ── Boot ──────────────────────────────────────────────────────
+          +window.addEventListener("resize", () => {
+          +  if (arActive) resizeArOverlay();
+          +});
+          +
+           subtitleBox.classList.add("hidden");
+           keyboardHud.classList.add("hidden");
+           helpOverlay.classList.add("hidden");
+           langModal.classList.add("hidden");
+           mobileModal.classList.add("hidden");
+          +arPanel.classList.add("hidden");
+           
+           // Estado inicial: veille (aguardando wake word)
+           orb.setState("veille");
+          diff --git a/frontend/src/style.css b/frontend/src/style.css
+          index 94ac4c8..6b9d87f 100644
+          --- a/frontend/src/style.css
+          +++ b/frontend/src/style.css
+          @@ -132,6 +132,62 @@ html, body {
+             color: var(--clr-text);
+           }
+           
+          +/* Realidade aumentada */
+          +.ar-panel {
+          +  position: fixed;
+          +  inset: 0;
+          +  z-index: 80;
+          +  background: #020617;
+          +  display: block;
+          +}
+          +.ar-panel.hidden {
+          +  opacity: 0;
+          +  pointer-events: none;
+          +}
+          +#ar-video,
+          +#ar-overlay {
+          +  position: absolute;
+          +  inset: 0;
+          +  width: 100%;
+          +  height: 100%;
+          +}
+          +#ar-video {
+          +  object-fit: contain;
+          +  background: #020617;
+          +}
+          +#ar-overlay {
+          +  pointer-events: none;
+          +}
+          +.ar-topbar {
+          +  position: absolute;
+          +  top: 18px;
+          +  right: 18px;
+          +  display: flex;
+          +  align-items: center;
+          +  gap: 10px;
+          +  padding: 7px 10px;
+          +  border-radius: 8px;
+          +  border: 1px solid rgba(6,182,212,0.35);
+          +  background: rgba(2,6,23,0.76);
+          +  color: rgba(255,255,255,0.9);
+          +  font-size: 12px;
+          +  text-transform: uppercase;
+          +  z-index: 90;
+          +}
+          +.ar-close {
+          +  width: 26px;
+          +  height: 26px;
+          +  border: 1px solid rgba(255,255,255,0.18);
+          +  border-radius: 6px;
+          +  background: rgba(255,255,255,0.08);
+          +  color: rgba(255,255,255,0.92);
+          +  cursor: pointer;
+          +}
+          +.ar-close:hover {
+          +  border-color: rgba(248,113,113,0.8);
+          +  color: #fca5a5;
+          +}
+          +
+           /* ── Erreur ──────────────────────────────────────────────── */
+           .error-text {
+             position: fixed;
+          diff --git a/main.py b/main.py
+          index 74a30cd..f2825f6 100644
+          --- a/main.py
+          +++ b/main.py
+          @@ -124,7 +124,7 @@ from camera_module import (
+               ver_camera, capturar_e_salvar, aprender_rosto,
+               resposta_o_que_voce_ve, resposta_tem_alguem, resposta_o_que_e_isso,
+               status_camera, inicializar_camera, detectar_objetos, contar_rostos,
+          -    capturar_camera,
+          +    capturar_camera, detectar_rostos, reconhecer_rostos,
+           )
+           from specialist_module import (
+               detectar_modo, ativar_modo, desativar_modo, get_modo_atual, modo_ativo,
+          @@ -877,6 +877,30 @@ async def traiter_commande_systeme(texte: str) -> bool:
+               await parler(resposta_visao)
+               return True
+           
+          +    mots_ar_on = {
+          +        "realidade aumentada", "modo realidade aumentada", "abrir realidade aumentada",
+          +        "abre realidade aumentada", "liga realidade aumentada", "ativar realidade aumentada",
+          +        "interface de realidade aumentada", "modo ar", "abrir ar", "liga ar",
+          +        "augmented reality", "ar mode",
+          +    }
+          +    mots_ar_off = {
+          +        "fechar realidade aumentada", "fecha realidade aumentada", "desligar realidade aumentada",
+          +        "sair da realidade aumentada", "parar realidade aumentada", "fechar ar",
+          +        "desligar ar", "stop ar", "close ar",
+          +    }
+          +    if any(m in t for m in mots_ar_off):
+          +        if CONNECTED_CLIENTS:
+          +            msg = json.dumps({"action": "ar_mode", "enabled": False})
+          +            await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
+          +        await parler("Fechei a realidade aumentada.")
+          +        return True
+          +    if any(m in t for m in mots_ar_on):
+          +        if CONNECTED_CLIENTS:
+          +            msg = json.dumps({"action": "ar_mode", "enabled": True})
+          +            await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
+          +        await parler("Abrindo a realidade aumentada.")
+          +        return True
+          +
+               # ── Modo Realtime ─────────────────────────────────────────
+               if any(m in t for m in _TRIGGERS_REALTIME_ON):
+                   await _ativar_modo_realtime()
+          @@ -2281,14 +2305,54 @@ def _iniciar_servidor_frontend() -> bool:
+                   def do_POST(self):
+                       import urllib.parse
+                       path = urllib.parse.urlparse(self.path).path
+          -            if path != "/api/realtime-tool":
+          -                self.send_error(404)
+          -                return
+           
+                       try:
+                           length = int(self.headers.get("Content-Length", "0"))
+                           raw = self.rfile.read(length).decode("utf-8")
+                           payload = json.loads(raw or "{}")
+          +
+          +                if path == "/api/ar-frame":
+          +                    image_b64 = str(payload.get("image_b64", "")).strip()
+          +                    if "," in image_b64:
+          +                        image_b64 = image_b64.split(",", 1)[1]
+          +                    if not image_b64:
+          +                        self._send_json(400, {"ok": False, "error": "Frame ausente."})
+          +                        return
+          +
+          +                    try:
+          +                        img_bytes = base64.b64decode(image_b64, validate=False)
+          +                    except Exception:
+          +                        self._send_json(400, {"ok": False, "error": "Frame invalido."})
+          +                        return
+          +
+          +                    lingua = str(payload.get("langue") or get_langue() or "pt")
+          +                    rostos = detectar_rostos(img_bytes)
+          +                    nomes = reconhecer_rostos(img_bytes) if rostos else []
+          +                    pessoas = []
+          +                    for idx, rosto in enumerate(rostos):
+          +                        nome = nomes[idx] if idx < len(nomes) else "desconhecido"
+          +                        pessoas.append({
+          +                            "label": nome if nome != "desconhecido" else "rosto",
+          +                            "confidence": None,
+          +                            **rosto,
+          +                        })
+          +
+          +                    objetos = detectar_objetos(img_bytes, lingua=lingua)
+          +                    self._send_json(200, {
+          +                        "ok": True,
+          +                        "faces": pessoas,
+          +                        "objects": objetos[:20],
+          +                        "summary": {
+          +                            "faces": len(pessoas),
+          +                            "objects": len(objetos),
+          +                        },
+          +                    })
+          +                    return
+          +
+          +                if path != "/api/realtime-tool":
+          +                    self.send_error(404)
+          +                    return
+          +
+                           comando = str(payload.get("comando", "")).strip()
+                           if not comando:
+                               self._send_json(400, {"ok": False, "resultado": "Comando vazio."})
+          '@ | ForEach-Object { $_ -replace '^          ', '' } | Set-Content -LiteralPath ar-source.patch -Encoding UTF8
+          git apply --check ar-source.patch
+          git apply ar-source.patch
 
       - name: Validate and build
         shell: pwsh
