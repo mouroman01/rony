@@ -1,0 +1,79 @@
+name: Apply intent router wiring
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-intent-main.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-intent-main:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Patch main wiring
+        shell: python
+        run: |
+          from pathlib import Path
+
+          main = Path('main.py')
+          text = main.read_text(encoding='utf-8')
+
+          text = text.replace('import unicodedata\n', '', 1)
+          if 'from intent_router import IntentRouter' not in text:
+              text = text.replace(
+                  'from vision_actions import executar_acao_visao\n',
+                  'from vision_actions import executar_acao_visao\nfrom intent_router import IntentRouter\n',
+                  1,
+              )
+          text = text.replace('_intencao_pendente: dict | None = None', '_intent_router = IntentRouter()', 1)
+
+          start = text.find('\n\ndef _normalizar_intencao(')
+          if start != -1:
+              end = text.find('\n# ═', start)
+              if end == -1:
+                  raise RuntimeError('Nao encontrei fim do bloco antigo de intencao')
+              text = text[:start + 1] + text[end:]
+
+          old = '''    global _intencao_pendente\n    t = texte.lower().strip()\n    tn = _normalizar_intencao(texte)\n    langue = get_langue()\n\n    if _intencao_pendente and time.time() - _intencao_pendente.get("ts", 0) <= 12:\n        alvo = _alvo_de_contexto(tn)\n        acao = _intencao_pendente.get("acao")\n        if alvo:\n            _intencao_pendente = None\n            if alvo == "camera" and acao in {"fechar", "desligar", "parar"}:\n                _fermer_app("camera")\n                await parler("Fechei a câmera.")\n                return True\n            if alvo == "rony" and acao in {"fechar", "desligar", "parar"}:\n                await parler(get_reponse("au_revoir"))\n                await asyncio.sleep(0.5)\n                os._exit(0)\n    elif _intencao_pendente:\n        _intencao_pendente = None\n\n    acao_sem_alvo = _verbo_controle_sem_alvo(tn)\n    if acao_sem_alvo:\n        _intencao_pendente = {"acao": acao_sem_alvo, "ts": time.time()}\n        await parler("O que você quer que eu feche?")\n        return True\n\n    resposta_rapida = executar_intencao_rapida(texte)'''
+          new = '''    t = texte.lower().strip()\n    langue = get_langue()\n\n    intent = _intent_router.route(texte)\n    if intent.needs_clarification:\n        await parler(intent.question or "O que você quer que eu faça?")\n        return True\n\n    if intent.action in {"fechar", "desligar", "parar"} and intent.target == "camera":\n        _fermer_app("camera")\n        await parler("Fechei a câmera.")\n        return True\n\n    if intent.action in {"fechar", "desligar", "parar"} and intent.target in {\n        "chrome", "edge", "firefox", "spotify", "discord", "vscode", "teams", "zoom", "slack",\n    }:\n        resultado = _fermer_app(intent.target)\n        await parler(resultado)\n        return True\n\n    if intent.action in {"encerrar", "fechar", "desligar", "parar"} and intent.target == "rony":\n        await parler(get_reponse("au_revoir"))\n        await asyncio.sleep(0.5)\n        os._exit(0)\n\n    resposta_rapida = executar_intencao_rapida(texte)'''
+          if 'intent = _intent_router.route(texte)' not in text:
+              if old not in text:
+                  raise RuntimeError('Nao encontrei bloco antigo de comando de sistema')
+              text = text.replace(old, new, 1)
+
+          start = text.find('    # ── Arrêt / sortie')
+          end = text.find('    # ── Modo Realtime', start)
+          if start != -1 and end != -1:
+              text = text[:start] + text[end:]
+
+          main.write_text(text, encoding='utf-8')
+
+      - name: Validate
+        run: |
+          py -3 -m unittest tests.test_intent_router
+          py -3 -m py_compile main.py app_launcher.py intent_router.py
+
+      - name: Commit main wiring
+        shell: bash
+        run: |
+          if git diff --quiet -- main.py; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py
+          git commit -m "feat: route local commands through intent router"
+          git pull --rebase origin main
+          git push origin HEAD:main
