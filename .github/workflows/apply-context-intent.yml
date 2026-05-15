@@ -1,0 +1,84 @@
+name: Apply contextual intent fix
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-context-intent.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-context-intent:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Patch contextual command interpretation
+        shell: python
+        run: |
+          from pathlib import Path
+
+          main = Path('main.py')
+          text = main.read_text(encoding='utf-8')
+
+          if 'import unicodedata' not in text:
+              text = text.replace('import re\n', 'import re\nimport unicodedata\n', 1)
+
+          if '_intencao_pendente: dict | None = None' not in text:
+              text = text.replace(
+                  'historique_ia  = []    # Contexte Gemini actuel\n',
+                  'historique_ia  = []    # Contexte Gemini actuel\n_intencao_pendente: dict | None = None\n',
+                  1,
+              )
+
+          helper = '''\n\ndef _normalizar_intencao(texto: str) -> str:\n    texto = unicodedata.normalize("NFKD", texto.lower())\n    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))\n    texto = re.sub(r"[^\\w\\s]", " ", texto, flags=re.UNICODE)\n    return re.sub(r"\\s+", " ", texto).strip()\n\n\ndef _tokens_intencao(t: str) -> set[str]:\n    return set(t.split())\n\n\ndef _quer_fechar_camera(t: str) -> bool:\n    tokens = _tokens_intencao(t)\n    verbos = {"fecha", "fechar", "feche", "desliga", "desligar", "para", "parar", "close", "stop"}\n    alvos = {"camera", "webcam", "cam"}\n    return bool(tokens & verbos and tokens & alvos) or ("turn off" in t and bool(tokens & alvos))\n\n\ndef _verbo_controle_sem_alvo(t: str) -> str | None:\n    verbos_fechar = {"fecha", "fechar", "feche", "close"}\n    verbos_desligar = {"desliga", "desligar", "turn off"}\n    verbos_parar = {"para", "parar", "pare", "stop"}\n    if t in verbos_fechar:\n        return "fechar"\n    if t in verbos_desligar:\n        return "desligar"\n    if t in verbos_parar:\n        return "parar"\n    return None\n\n\ndef _alvo_de_contexto(t: str) -> str | None:\n    tokens = _tokens_intencao(t)\n    if tokens & {"camera", "webcam", "cam"}:\n        return "camera"\n    if tokens & {"rony", "assistente", "voce"}:\n        return "rony"\n    if tokens & {"som", "audio", "volume"}:\n        return "audio"\n    return None\n\n\ndef _quer_encerrar_rony(t: str) -> bool:\n    despedidas_exatas = {\n        "tchau", "ate logo", "ate mais", "au revoir", "goodbye", "bye rony",\n        "adios", "ciao", "auf wiedersehen", "boa noite rony", "boa tarde rony",\n    }\n    comandos_com_alvo = {\n        "encerrar rony", "encerra rony", "encerre rony", "pode encerrar rony",\n        "fechar rony", "fecha rony", "feche rony", "pode fechar rony",\n        "desligar rony", "desliga rony", "pode desligar rony",\n        "sair rony", "rony pode sair", "pode sair rony",\n        "stop rony", "close rony", "exit rony", "shut down rony",\n        "para rony", "para o rony", "cierra rony", "sal rony",\n    }\n    return t in despedidas_exatas or any(cmd in t for cmd in comandos_com_alvo)\n'''
+          marker = 'def _humor_ativo() -> bool:\n    return _carregar_config().get("humor", True)\n\n\n'
+          if 'def _normalizar_intencao' not in text:
+              text = text.replace(marker, marker + helper, 1)
+
+          old = '''    t = texte.lower().strip()\n    langue = get_langue()\n\n    resposta_rapida = executar_intencao_rapida(texte)'''
+          new = '''    global _intencao_pendente\n    t = texte.lower().strip()\n    tn = _normalizar_intencao(texte)\n    langue = get_langue()\n\n    if _intencao_pendente and time.time() - _intencao_pendente.get("ts", 0) <= 12:\n        alvo = _alvo_de_contexto(tn)\n        acao = _intencao_pendente.get("acao")\n        if alvo:\n            _intencao_pendente = None\n            if alvo == "camera" and acao in {"fechar", "desligar", "parar"}:\n                _fermer_app("camera")\n                await parler("Fechei a câmera.")\n                return True\n            if alvo == "rony" and acao in {"fechar", "desligar", "parar"}:\n                await parler(get_reponse("au_revoir"))\n                await asyncio.sleep(0.5)\n                os._exit(0)\n    elif _intencao_pendente:\n        _intencao_pendente = None\n\n    acao_sem_alvo = _verbo_controle_sem_alvo(tn)\n    if acao_sem_alvo:\n        _intencao_pendente = {"acao": acao_sem_alvo, "ts": time.time()}\n        await parler("O que você quer que eu feche?")\n        return True\n\n    resposta_rapida = executar_intencao_rapida(texte)'''
+          if 'tn = _normalizar_intencao(texte)' not in text:
+              text = text.replace(old, new, 1)
+
+          old_stop = '''    if any(m in t for m in mots_arret):\n        await parler(get_reponse("au_revoir"))\n        await asyncio.sleep(0.5)\n        os._exit(0)'''
+          new_stop = '''    if _quer_fechar_camera(tn):\n        _fermer_app("camera")\n        await parler("Fechei a câmera.")\n        return True\n\n    if _quer_encerrar_rony(tn):\n        await parler(get_reponse("au_revoir"))\n        await asyncio.sleep(0.5)\n        os._exit(0)'''
+          if 'if _quer_fechar_camera(tn):' not in text:
+              text = text.replace(old_stop, new_stop, 1)
+
+          main.write_text(text, encoding='utf-8')
+
+          launcher = Path('app_launcher.py')
+          launch_text = launcher.read_text(encoding='utf-8')
+          if '"camera": ["WindowsCamera.exe"]' not in launch_text:
+              launch_text = launch_text.replace(
+                  '        "slack": ["slack.exe"],\n',
+                  '        "slack": ["slack.exe"],\n        "camera": ["WindowsCamera.exe"], "câmera": ["WindowsCamera.exe"],\n        "webcam": ["WindowsCamera.exe"], "windows camera": ["WindowsCamera.exe"],\n',
+                  1,
+              )
+          launcher.write_text(launch_text, encoding='utf-8')
+
+      - name: Validate syntax
+        run: py -3 -m py_compile main.py app_launcher.py
+
+      - name: Commit patch
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py app_launcher.py
+          git commit -m "fix: interpret contextual close commands"
+          git pull --rebase origin main
+          git push origin HEAD:main
