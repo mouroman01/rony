@@ -70,6 +70,36 @@ def _ler_manifesto() -> dict | None:
         return None
 
 
+def _formatar_notas_update(manifesto: dict) -> str:
+    """Monta um texto curto e legivel com o que sera atualizado."""
+    notas = str(manifesto.get("notes", "")).strip()
+    mudancas = manifesto.get("changes", [])
+
+    linhas: list[str] = []
+    if isinstance(mudancas, list):
+        for item in mudancas:
+            item_txt = str(item).strip()
+            if item_txt:
+                linhas.append(item_txt)
+    elif isinstance(mudancas, str) and mudancas.strip():
+        linhas.extend(l.strip() for l in mudancas.splitlines() if l.strip())
+
+    if not linhas and notas:
+        linhas.extend(l.strip(" -") for l in notas.splitlines() if l.strip())
+
+    if linhas:
+        return "\n".join(f"- {linha}" for linha in linhas[:8])
+
+    return "- Melhorias e correcoes internas do R.O.N.Y."
+
+
+def _resumir_notas_update(texto: str, limite: int = 160) -> str:
+    texto = " ".join(l.strip(" -") for l in texto.splitlines() if l.strip())
+    if len(texto) <= limite:
+        return texto
+    return texto[: limite - 3].rstrip() + "..."
+
+
 # ═══════════════════════════════════════════════════════════════
 #  DOWNLOAD DO INSTALADOR
 # ═══════════════════════════════════════════════════════════════
@@ -150,6 +180,7 @@ def verificar_atualizacao(
         url_download = manifesto.get("download_url",   "").strip()
         notas        = manifesto.get("notes", "").strip()
         obrigatoria  = bool(manifesto.get("mandatory", False))
+        detalhes     = _formatar_notas_update(manifesto)
 
         if not versao_nova:
             return
@@ -165,8 +196,8 @@ def verificar_atualizacao(
             try:
                 notif_fn(
                     "Rony — Atualizacao disponivel",
-                    f"v{versao_nova} esta pronta. {notas[:80]}",
-                    5,
+                    f"v{versao_nova} esta pronta: {_resumir_notas_update(detalhes)}",
+                    8,
                 )
             except Exception:
                 pass
@@ -179,6 +210,8 @@ def verificar_atualizacao(
                     "action"  : "update_available",
                     "versao"  : versao_nova,
                     "notas"   : notas,
+                    "detalhes": detalhes,
+                    "changes" : manifesto.get("changes", []),
                     "mandatory": obrigatoria,
                     "download_url": url_download,
                 })
@@ -198,7 +231,7 @@ def verificar_atualizacao(
                     f"Nova versao do Rony disponivel!\n\n"
                     f"Versao atual : {versao_atual}\n"
                     f"Nova versao  : {versao_nova}\n\n"
-                    f"{notas}\n\n"
+                    f"O que sera atualizado:\n{detalhes}\n\n"
                     f"Deseja atualizar agora?"
                 )
                 aceite = janela_pywebview.evaluate_js(f"confirm({msg_js})")

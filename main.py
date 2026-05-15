@@ -2074,7 +2074,6 @@ def _aplicar_icone_janela_windows() -> None:
         return
 
     def _worker():
-        time.sleep(1.0)
         try:
             user32 = ctypes.windll.user32
             current_pid = os.getpid()
@@ -2084,15 +2083,21 @@ def _aplicar_icone_janela_windows() -> None:
             WM_SETICON = 0x0080
             ICON_SMALL = 0
             ICON_BIG = 1
+            GCLP_HICON = -14
+            GCLP_HICONSM = -34
 
-            big_icon = user32.LoadImageW(0, str(icon_path), IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
+            set_class_long = getattr(user32, "SetClassLongPtrW", user32.SetClassLongW)
+            big_icon = user32.LoadImageW(0, str(icon_path), IMAGE_ICON, 256, 256, LR_LOADFROMFILE)
+            medium_icon = user32.LoadImageW(0, str(icon_path), IMAGE_ICON, 32, 32, LR_LOADFROMFILE)
             small_icon = user32.LoadImageW(0, str(icon_path), IMAGE_ICON, 16, 16, LR_LOADFROMFILE)
-            if not big_icon and not small_icon:
+            if not big_icon and not medium_icon and not small_icon:
                 return
 
             enum_proc_type = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+            applied = False
 
             def _enum_proc(hwnd, _lparam):
+                nonlocal applied
                 pid = ctypes.c_ulong()
                 user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
                 if pid.value != current_pid or not user32.IsWindowVisible(hwnd):
@@ -2110,11 +2115,24 @@ def _aplicar_icone_janela_windows() -> None:
 
                 if big_icon:
                     user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, big_icon)
+                    set_class_long(hwnd, GCLP_HICON, big_icon)
+                elif medium_icon:
+                    user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, medium_icon)
+                    set_class_long(hwnd, GCLP_HICON, medium_icon)
+                if medium_icon:
+                    user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, medium_icon)
                 if small_icon:
                     user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, small_icon)
+                    set_class_long(hwnd, GCLP_HICONSM, small_icon)
+                applied = True
                 return True
 
-            user32.EnumWindows(enum_proc_type(_enum_proc), 0)
+            enum_proc = enum_proc_type(_enum_proc)
+            for _ in range(30):
+                user32.EnumWindows(enum_proc, 0)
+                if applied:
+                    return
+                time.sleep(0.5)
         except Exception as exc:
             print(f"[UI] Nao foi possivel aplicar icone da janela: {exc}")
 
