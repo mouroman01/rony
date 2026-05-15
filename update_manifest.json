@@ -1,12 +1,13 @@
 {
-  "latest_version": "1.0.29",
-  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.29.exe",
-  "notes": "fix: include changelog in update manifest\nfix: restore generated version files before release rebase\nfeat: route local commands through intent router\nfeat: add intent router module",
+  "latest_version": "1.0.31",
+  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.31.exe",
+  "notes": "fix: publish update manifest cleanly\nfix: show update details and runtime icon\nfix: include changelog in update manifest\nfix: restore generated version files before release rebase\nfeat: route local commands through intent router",
   "changes": [
+    "fix: publish update manifest cleanly",
+    "fix: show update details and runtime icon",
     "fix: include changelog in update manifest",
     "fix: restore generated version files before release rebase",
-    "feat: route local commands through intent router",
-    "feat: add intent router module"
+    "feat: route local commands through intent router"
   ],
   "mandatory": false
 }
