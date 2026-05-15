@@ -1,12 +1,14 @@
 {
-  "latest_version": "1.0.32",
-  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.32.exe",
-  "notes": "Realidade aumentada ao vivo na interface do Rony\nComandos de voz para abrir e fechar o modo AR\nReconhecimento visual com marcacoes para rostos e objetos na camera\nNovo endpoint local para analisar frames da camera em tempo real",
+  "latest_version": "1.0.33",
+  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.33.exe",
+  "notes": "fix: import ctypes ausente + coroutine nao aguardada no rony_updater\nchore: clean update notes for v1.0.32\nchore: remove temporary augmented reality workflow\nchore: trigger release workflow for AR build\nchore: trigger release for augmented reality build\nfeat: add augmented reality camera overlay",
   "changes": [
-    "Realidade aumentada ao vivo na interface do Rony",
-    "Comandos de voz para abrir e fechar o modo AR",
-    "Reconhecimento visual com marcacoes para rostos e objetos na camera",
-    "Novo endpoint local para analisar frames da camera em tempo real"
+    "fix: import ctypes ausente + coroutine nao aguardada no rony_updater",
+    "chore: clean update notes for v1.0.32",
+    "chore: remove temporary augmented reality workflow",
+    "chore: trigger release workflow for AR build",
+    "chore: trigger release for augmented reality build",
+    "feat: add augmented reality camera overlay"
   ],
   "mandatory": false
 }
