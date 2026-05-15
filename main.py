@@ -25,6 +25,7 @@ import time
 import math
 import random
 import re
+import unicodedata
 import builtins
 import base64
 import subprocess
@@ -160,6 +161,7 @@ STOP_PARLER    = False
 _skip_pc_audio = False
 _micro_actif   = True
 historique_ia  = []    # Contexte Gemini actuel
+_intencao_pendente: dict | None = None
 
 # ── Wake word — modo de espera / ativo ───────────────────────
 _modo_ativo          = False   # False = veille, True = actif
@@ -246,6 +248,64 @@ def _humor_ativo() -> bool:
     return _carregar_config().get("humor", True)
 
 
+
+
+def _normalizar_intencao(texto: str) -> str:
+    texto = unicodedata.normalize("NFKD", texto.lower())
+    texto = "".join(ch for ch in texto if not unicodedata.combining(ch))
+    texto = re.sub(r"[^\w\s]", " ", texto, flags=re.UNICODE)
+    return re.sub(r"\s+", " ", texto).strip()
+
+
+def _tokens_intencao(t: str) -> set[str]:
+    return set(t.split())
+
+
+def _quer_fechar_camera(t: str) -> bool:
+    tokens = _tokens_intencao(t)
+    verbos = {"fecha", "fechar", "feche", "desliga", "desligar", "para", "parar", "close", "stop"}
+    alvos = {"camera", "webcam", "cam"}
+    return bool(tokens & verbos and tokens & alvos) or ("turn off" in t and bool(tokens & alvos))
+
+
+def _verbo_controle_sem_alvo(t: str) -> str | None:
+    verbos_fechar = {"fecha", "fechar", "feche", "close"}
+    verbos_desligar = {"desliga", "desligar", "turn off"}
+    verbos_parar = {"para", "parar", "pare", "stop"}
+    if t in verbos_fechar:
+        return "fechar"
+    if t in verbos_desligar:
+        return "desligar"
+    if t in verbos_parar:
+        return "parar"
+    return None
+
+
+def _alvo_de_contexto(t: str) -> str | None:
+    tokens = _tokens_intencao(t)
+    if tokens & {"camera", "webcam", "cam"}:
+        return "camera"
+    if tokens & {"rony", "assistente", "voce"}:
+        return "rony"
+    if tokens & {"som", "audio", "volume"}:
+        return "audio"
+    return None
+
+
+def _quer_encerrar_rony(t: str) -> bool:
+    despedidas_exatas = {
+        "tchau", "ate logo", "ate mais", "au revoir", "goodbye", "bye rony",
+        "adios", "ciao", "auf wiedersehen", "boa noite rony", "boa tarde rony",
+    }
+    comandos_com_alvo = {
+        "encerrar rony", "encerra rony", "encerre rony", "pode encerrar rony",
+        "fechar rony", "fecha rony", "feche rony", "pode fechar rony",
+        "desligar rony", "desliga rony", "pode desligar rony",
+        "sair rony", "rony pode sair", "pode sair rony",
+        "stop rony", "close rony", "exit rony", "shut down rony",
+        "para rony", "para o rony", "cierra rony", "sal rony",
+    }
+    return t in despedidas_exatas or any(cmd in t for cmd in comandos_com_alvo)
 # ═══════════════════════════════════════════════════════════════
 #  SYSTÈME PROMPT — HUMANIZADO
 # ═══════════════════════════════════════════════════════════════
@@ -833,8 +893,32 @@ async def traiter_commande_systeme(texte: str) -> bool:
     Traite les commandes système directes (sans IA).
     Retourne True si la commande a été gérée.
     """
+    global _intencao_pendente
     t = texte.lower().strip()
+    tn = _normalizar_intencao(texte)
     langue = get_langue()
+
+    if _intencao_pendente and time.time() - _intencao_pendente.get("ts", 0) <= 12:
+        alvo = _alvo_de_contexto(tn)
+        acao = _intencao_pendente.get("acao")
+        if alvo:
+            _intencao_pendente = None
+            if alvo == "camera" and acao in {"fechar", "desligar", "parar"}:
+                _fermer_app("camera")
+                await parler("Fechei a câmera.")
+                return True
+            if alvo == "rony" and acao in {"fechar", "desligar", "parar"}:
+                await parler(get_reponse("au_revoir"))
+                await asyncio.sleep(0.5)
+                os._exit(0)
+    elif _intencao_pendente:
+        _intencao_pendente = None
+
+    acao_sem_alvo = _verbo_controle_sem_alvo(tn)
+    if acao_sem_alvo:
+        _intencao_pendente = {"acao": acao_sem_alvo, "ts": time.time()}
+        await parler("O que você quer que eu feche?")
+        return True
 
     resposta_rapida = executar_intencao_rapida(texte)
     if resposta_rapida:
@@ -867,7 +951,12 @@ async def traiter_commande_systeme(texte: str) -> bool:
         # ES
         "cierra rony", "adiós rony", "sal rony",
     }
-    if any(m in t for m in mots_arret):
+    if _quer_fechar_camera(tn):
+        _fermer_app("camera")
+        await parler("Fechei a câmera.")
+        return True
+
+    if _quer_encerrar_rony(tn):
         await parler(get_reponse("au_revoir"))
         await asyncio.sleep(0.5)
         os._exit(0)

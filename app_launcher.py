@@ -247,6 +247,8 @@ def _fermer_app(nom_vocal: str) -> str:
         "vscode": ["code.exe"], "obs": ["obs64.exe", "obs32.exe"],
         "steam": ["steam.exe"], "teams": ["teams.exe"], "zoom": ["zoom.exe"],
         "slack": ["slack.exe"],
+        "camera": ["WindowsCamera.exe"], "câmera": ["WindowsCamera.exe"],
+        "webcam": ["WindowsCamera.exe"], "windows camera": ["WindowsCamera.exe"],
     }
 
     cibles = []
