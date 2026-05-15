@@ -37,6 +37,18 @@ jobs:
           "RONY_ASSET_NAME=$assetName" | Out-File -FilePath $env:GITHUB_ENV -Append
           "RONY_DOWNLOAD_URL=$downloadUrl" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+          $changes = git log -n 12 --pretty=format:"%s" |
+            Where-Object {
+              $_ -and
+              $_ -notlike "chore: update auto-release manifest*" -and
+              $_ -notlike "chore: apply*workflow*" -and
+              $_ -notlike "test: cover intent router"
+            } |
+            Select-Object -First 6
+          if (-not $changes -or $changes.Count -eq 0) {
+            $changes = @("Melhorias e correcoes internas do R.O.N.Y.")
+          }
+
           (Get-Content -LiteralPath "main.py" -Raw) `
             -replace 'VERSION = "[^"]+"', "VERSION = `"$version`"" |
             Set-Content -LiteralPath "main.py" -Encoding UTF8
@@ -48,7 +60,8 @@ jobs:
           $manifest = [ordered]@{
             latest_version = $version
             download_url = $downloadUrl
-            notes = "Atualizacao automatica do R.O.N.Y a partir do commit ${{ github.sha }}."
+            notes = ($changes -join "`n")
+            changes = @($changes)
             mandatory = $false
           }
           $manifest | ConvertTo-Json -Depth 4 |
