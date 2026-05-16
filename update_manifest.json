@@ -1,14 +1,14 @@
 {
-  "latest_version": "1.0.34",
-  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.34.exe",
-  "notes": "fix: cache mic index em memoria + sleep no loop wake word para evitar CPU 100%\nfix: import ctypes ausente + coroutine nao aguardada no rony_updater\nchore: clean update notes for v1.0.32\nchore: remove temporary augmented reality workflow\nchore: trigger release workflow for AR build\nchore: trigger release for augmented reality build",
+  "latest_version": "1.0.35",
+  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.35.exe",
+  "notes": "chore: sincroniza VERSION para 1.0.33 (evita auto-update loop)\nfix: cache mic index em memoria + sleep no loop wake word para evitar CPU 100%\nfix: import ctypes ausente + coroutine nao aguardada no rony_updater\nchore: clean update notes for v1.0.32\nchore: remove temporary augmented reality workflow\nchore: trigger release workflow for AR build",
   "changes": [
+    "chore: sincroniza VERSION para 1.0.33 (evita auto-update loop)",
     "fix: cache mic index em memoria + sleep no loop wake word para evitar CPU 100%",
     "fix: import ctypes ausente + coroutine nao aguardada no rony_updater",
     "chore: clean update notes for v1.0.32",
     "chore: remove temporary augmented reality workflow",
-    "chore: trigger release workflow for AR build",
-    "chore: trigger release for augmented reality build"
+    "chore: trigger release workflow for AR build"
   ],
   "mandatory": false
 }
