@@ -237,39 +237,94 @@ def lancer_app(nom_vocal: str, url: str = None) -> str:
 
 
 def _fermer_app(nom_vocal: str) -> str:
-    """Ferme un processus par nom vocal."""
+    """Fecha um processo pelo nome vocal (PT/EN/FR/ES)."""
     nom = nom_vocal.lower().strip()
 
-    # Correspondance catalogue → nom de processus
-    noms_process = {
-        "chrome": ["chrome.exe"], "firefox": ["firefox.exe"], "edge": ["msedge.exe"],
-        "spotify": ["spotify.exe"], "discord": ["discord.exe"], "vlc": ["vlc.exe"],
-        "vscode": ["code.exe"], "obs": ["obs64.exe", "obs32.exe"],
-        "steam": ["steam.exe"], "teams": ["teams.exe"], "zoom": ["zoom.exe"],
+    # Remove artigos em PT/FR/EN/ES que podem vir junto
+    for artigo in ("o ", "a ", "os ", "as ", "the ", "le ", "la ", "les ",
+                   "el ", "los ", "las ", "um ", "uma ", "un ", "une ",
+                   "meu ", "minha ", "seu ", "sua "):
+        if nom.startswith(artigo):
+            nom = nom[len(artigo):].strip()
+
+    # Correspondência direta entre nome de app e processo do Windows
+    noms_process: dict[str, list[str]] = {
+        "chrome": ["chrome.exe"],
+        "firefox": ["firefox.exe"],
+        "edge": ["msedge.exe"],
+        "brave": ["brave.exe"],
+        "opera": ["opera.exe"],
+        "spotify": ["spotify.exe"],
+        "discord": ["discord.exe"],
+        "vlc": ["vlc.exe"],
+        "vscode": ["code.exe"],
+        "obs": ["obs64.exe", "obs32.exe"],
+        "steam": ["steam.exe"],
+        "teams": ["teams.exe"],
+        "zoom": ["zoom.exe"],
         "slack": ["slack.exe"],
-        "camera": ["WindowsCamera.exe"], "câmera": ["WindowsCamera.exe"],
-        "webcam": ["WindowsCamera.exe"], "windows camera": ["WindowsCamera.exe"],
+        "telegram": ["telegram.exe"],
+        "whatsapp": ["whatsapp.exe"],
+        "skype": ["skype.exe"],
+        # Microsoft Office — nomes reais dos processos
+        "word": ["WINWORD.EXE", "winword.exe"],
+        "excel": ["EXCEL.EXE", "excel.exe"],
+        "powerpoint": ["POWERPNT.EXE", "powerpnt.exe"],
+        "outlook": ["OUTLOOK.EXE", "outlook.exe"],
+        "onenote": ["ONENOTE.EXE", "onenote.exe"],
+        # Sistema / utilitários
+        "notepad": ["notepad.exe"],
+        "notepad++": ["notepad++.exe"],
+        "paint": ["mspaint.exe"],
+        "mspaint": ["mspaint.exe"],
+        "explorer": ["explorer.exe"],
+        "taskmgr": ["taskmgr.exe"],
+        "cmd": ["cmd.exe"],
+        "powershell": ["powershell.exe", "pwsh.exe"],
+        "calculator": ["calculator.exe", "calc.exe"],
+        "7zip": ["7zFM.exe"],
+        "winrar": ["winrar.exe"],
+        # Câmera
+        "camera": ["WindowsCamera.exe"],
+        "câmera": ["WindowsCamera.exe"],
+        "webcam": ["WindowsCamera.exe"],
     }
 
-    cibles = []
-    for exe, aliases in _APPS_CATALOGUE.items():
-        if nom in aliases or nom == exe:
-            cibles = noms_process.get(exe, [f"{exe}.exe"])
-            break
+    cibles: list[str] = []
 
+    # 1. Busca no mapa direto
+    if nom in noms_process:
+        cibles = noms_process[nom]
+    else:
+        # 2. Busca por alias no catálogo
+        for exe_key, aliases in _APPS_CATALOGUE.items():
+            if nom in aliases or nom == exe_key:
+                cibles = noms_process.get(exe_key, [f"{exe_key}.exe"])
+                break
+
+    # 3. Fallback: tenta nome+.exe diretamente
     if not cibles:
         cibles = [f"{nom}.exe"]
 
     fermes = 0
     for proc in psutil.process_iter(["name", "pid"]):
         try:
-            if proc.info["name"].lower() in [c.lower() for c in cibles]:
+            pname = proc.info["name"].lower()
+            if pname in [c.lower() for c in cibles] or nom in pname:
                 proc.terminate()
                 fermes += 1
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             pass
 
-    return f"{fermes} instance(s) de '{nom_vocal}' fermée(s)." if fermes else f"'{nom_vocal}' n'était pas ouvert."
+    if fermes:
+        return {
+            "pt": f"{fermes} processo(s) de '{nom_vocal}' encerrado(s).",
+            "en": f"{fermes} process(es) of '{nom_vocal}' closed.",
+        }.get("pt", f"{fermes} processo(s) encerrado(s).")
+    return {
+        "pt": f"'{nom_vocal}' não estava aberto.",
+        "en": f"'{nom_vocal}' was not running.",
+    }.get("pt", f"'{nom_vocal}' not found.")
 
 
 def app_est_ouverte(nom_vocal: str) -> bool:

@@ -873,8 +873,16 @@ async def traiter_commande_systeme(texte: str) -> bool:
 
     intent = _intent_router.route(texte)
     if intent.needs_clarification:
-        await parler(intent.question or "O que você quer que eu faça?")
-        return True
+        # Só interrompe se o comando for realmente ambíguo (só o verbo, sem alvo)
+        # Ex: "fecha" → pede clareza. "fecha o word" → deixa cair nos handlers genéricos
+        _verbos_bare = {"fecha", "fechar", "feche", "close", "desliga", "desligar",
+                        "para", "parar", "pare", "stop"}
+        t_stripped = t.strip(".,!?")
+        palavras_cmd = t_stripped.split()
+        if t_stripped in _verbos_bare or (len(palavras_cmd) <= 2 and palavras_cmd[0] in _verbos_bare):
+            await parler(intent.question or "O que você quer que eu feche?")
+            return True
+        # Tem conteúdo após o verbo — deixa os handlers genéricos cuidar
 
     if intent.action in {"fechar", "desligar", "parar"} and intent.target == "camera":
         # Para o streaming AR Python + fecha app Windows Camera se aberta
