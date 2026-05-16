@@ -136,6 +136,7 @@ from wake_word import contient_wake_word, contient_mot_arret, nettoyer_commande
 from jarvis_actions import executar_intencao_rapida
 from vision_actions import executar_acao_visao
 from intent_router import IntentRouter
+from file_editor import editar_arquivo_ia
 from camera_module import (
     ver_camera, capturar_e_salvar, aprender_rosto,
     resposta_o_que_voce_ve, resposta_tem_alguem, resposta_o_que_e_isso,
@@ -903,6 +904,31 @@ async def traiter_commande_systeme(texte: str) -> bool:
     resposta_rapida = executar_intencao_rapida(texte)
     if resposta_rapida:
         await parler(resposta_rapida)
+        return True
+
+    # ── Edição / criação de arquivos (Word, Excel, PPTX, HTML, TXT) ──
+    _FILE_TRIGGERS = {
+        "cria", "criar", "crie", "faz", "fazer", "faça", "faca",
+        "gera", "gerar", "gere", "monta", "montar", "monte",
+        "edita", "editar", "edite", "escreve", "escrever",
+        "make", "create", "generate", "write",
+    }
+    _FILE_TYPES = {
+        "planilha", "excel", "xlsx", "word", "docx", "documento",
+        "apresentação", "apresentacao", "powerpoint", "pptx", "slide",
+        "dashboard", "html", "relatório", "relatorio", "anotação",
+        "anotacao", "nota", "arquivo", "tabela", "spreadsheet", "report",
+    }
+    t_words = set(t.split())
+    if _FILE_TRIGGERS & t_words and (_FILE_TYPES & t_words or any(ft in t for ft in _FILE_TYPES)):
+        await send_web_state("thinking")
+        resposta_arquivo = await editar_arquivo_ia(
+            instrucao=texte,
+            client_gemini=_client_gemini,
+            lingua=langue,
+            abrir=True,
+        )
+        await parler(resposta_arquivo)
         return True
 
     resposta_visao = await executar_acao_visao(

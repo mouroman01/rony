@@ -60,6 +60,11 @@ pypiwin32>=223
 pywin32>=300
 comtypes>=1.4.0
 
+# --- Edição de arquivos (Word, Excel, PowerPoint) ---
+python-docx>=1.1.0
+openpyxl>=3.1.0
+python-pptx>=1.0.0
+
 # --- Divers ---
 pydantic>=2.0.0
 packaging>=23.0
