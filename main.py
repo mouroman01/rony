@@ -1019,16 +1019,23 @@ async def traiter_commande_systeme(texte: str) -> bool:
         "desligar ar", "stop ar", "close ar",
     }
     if any(m in t for m in mots_ar_off):
+        global _ar_active, _ar_task
+        _ar_active = False
+        if _ar_task and not _ar_task.done():
+            _ar_task.cancel()
         if CONNECTED_CLIENTS:
             msg = json.dumps({"action": "ar_mode", "enabled": False})
             await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
-        await parler("Fechei a realidade aumentada.")
+        await parler("Realidade aumentada desligada.")
         return True
     if any(m in t for m in mots_ar_on):
         if CONNECTED_CLIENTS:
             msg = json.dumps({"action": "ar_mode", "enabled": True})
             await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
-        await parler("Abrindo a realidade aumentada.")
+        # Inicia o streaming Python → frontend (independente de realtime)
+        if not _ar_active:
+            _ar_task = asyncio.create_task(_ar_stream_loop())
+        await parler("Realidade aumentada ativada.")
         return True
 
     # ── Modo Realtime ─────────────────────────────────────────
