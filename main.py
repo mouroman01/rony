@@ -280,14 +280,15 @@ def _humor_ativo() -> bool:
 def construire_system_prompt() -> str:
     langue   = get_langue()
     faits_n  = compter_faits()
-    heure    = datetime.now().strftime("%H:%M")
-    data_str = datetime.now().strftime("%A, %d de %B de %Y")
+    _now     = datetime.now().astimezone()
+    heure    = _now.strftime("%H:%M")
+    data_str = _now.strftime("%A, %d de %B de %Y")
     nome     = _nome_usuario()
     assistant_name = _nome_assistente()
     humor    = _humor_ativo()
 
     # Saudação por hora
-    h = datetime.now().hour
+    h = _now.hour
     saudacoes = {
         "pt": "Bom dia" if h < 12 else "Boa tarde" if h < 18 else "Boa noite",
         "fr": "Bonjour" if h < 12 else "Bon après-midi" if h < 18 else "Bonsoir",
@@ -875,8 +876,16 @@ async def traiter_commande_systeme(texte: str) -> bool:
         return True
 
     if intent.action in {"fechar", "desligar", "parar"} and intent.target == "camera":
+        # Para o streaming AR Python + fecha app Windows Camera se aberta
+        global _ar_active, _ar_task
+        _ar_active = False
+        if _ar_task and not _ar_task.done():
+            _ar_task.cancel()
+        if CONNECTED_CLIENTS:
+            msg_ar = json.dumps({"action": "ar_mode", "enabled": False})
+            await asyncio.gather(*[ws.send(msg_ar) for ws in CONNECTED_CLIENTS], return_exceptions=True)
         _fermer_app("camera")
-        await parler("Fechei a câmera.")
+        await parler("Câmera desligada.")
         return True
 
     if intent.action in {"fechar", "desligar", "parar"} and intent.target in {
@@ -954,7 +963,7 @@ async def traiter_commande_systeme(texte: str) -> bool:
     # ── Heure ─────────────────────────────────────────────────
     mots_heure = {"heure", "l'heure", "time", "hora", "uhrzeit", "ora", "час"}
     if any(m in t for m in mots_heure):
-        heure = datetime.now().strftime("%H:%M")
+        heure = datetime.now().astimezone().strftime("%H:%M")
         msgs  = {
             "fr": f"Il est {heure}.", "en": f"It's {heure}.", "pt": f"São {heure}.",
             "es": f"Son las {heure}.", "de": f"Es ist {heure} Uhr.", "it": f"Sono le {heure}.",
@@ -1987,24 +1996,37 @@ async def desativar_rony() -> None:
 async def ecouter_wake_word() -> str | None:
     """
     Escuta passiva e leve — só procura o wake word.
-    Timeout curto, não muda o estado do frontend.
+    Threshold alto para ignorar ruído ambiente (TV, fundo, etc.).
     """
     if not _micro_actif:
         return None
     mic_index = _charger_config_micro()
     recognizer = sr.Recognizer()
-    recognizer.energy_threshold         = 250
-    recognizer.dynamic_energy_threshold = True
-    recognizer.pause_threshold          = 0.5
+    # Threshold alto → só captura voz real, não ruído ambiente
+    recognizer.energy_threshold         = 1800
+    recognizer.dynamic_energy_threshold = False   # fixo para evitar adaptação a barulho
+    recognizer.pause_threshold          = 0.6
+    recognizer.non_speaking_duration    = 0.3
 
     try:
         mic_kwargs = {"device_index": mic_index} if mic_index is not None else {}
         with sr.Microphone(**mic_kwargs) as source:
-            recognizer.adjust_for_ambient_noise(source, duration=0.2)
+            recognizer.adjust_for_ambient_noise(source, duration=0.3)
             audio = await asyncio.get_event_loop().run_in_executor(
                 None,
-                lambda: recognizer.listen(source, timeout=4, phrase_time_limit=4),
+                lambda: recognizer.listen(source, timeout=5, phrase_time_limit=5),
             )
+
+        # Verificação de energia antes de gastar API Groq
+        try:
+            import audioop as _audioop
+            raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
+            rms = _audioop.rms(raw, 2)
+            if rms < 600:          # muito fraco → ruído, descarta
+                return None
+        except Exception:
+            pass
+
         langue = get_langue()
         lang_codes = {
             "fr": "fr-FR", "pt": "pt-BR", "en": "en-US", "es": "es-ES",
@@ -2068,21 +2090,61 @@ async def boucle_ecoute() -> None:
             if not _modo_ativo:
                 texte = await ecouter_wake_word()
                 if not texte:
-                    # Pequena pausa para não sobrecarregar CPU em falhas rápidas
                     await asyncio.sleep(0.5)
                     continue
-                if texte:
+
+                # Normaliza: remove pontuação final, normaliza espaços
+                import re as _re
+                t_veille = _re.sub(r"[^\w\s]", " ", texte.lower()).strip()
+                t_veille = " ".join(t_veille.split())  # colapsa espaços múltiplos
+
+                # Só loga se for texto real (≥2 chars)
+                if len(t_veille) >= 2:
                     print(f"[VEILLE] Entendu : '{texte}'")
-                    # Permite ativar realtime mesmo em veille
-                    t_veille = texte.lower().strip()
-                    if any(kw in t_veille for kw in _TRIGGERS_REALTIME_ON):
-                        await _ativar_modo_realtime()
-                        continue
-                    if contient_wake_word(texte):
-                        await ativar_rony()
-                        commande = nettoyer_commande(texte)
-                        if commande and len(commande.split()) >= 2:
-                            await traiter_message(commande)
+
+                # 1. Shutdown por voz mesmo em veille
+                _SHUTDOWN_VEILLE = {
+                    "tchau", "ate logo", "ate mais", "encerrar", "fechar rony",
+                    "desligar rony", "sair", "exit", "goodbye", "adeus",
+                }
+                if any(kw in t_veille for kw in _SHUTDOWN_VEILLE):
+                    await parler({"pt": "Até logo!", "en": "Goodbye!", "fr": "Au revoir!", "es": "¡Hasta luego!"}.get(get_langue(), "Até logo!"))
+                    await asyncio.sleep(0.5)
+                    os._exit(0)
+
+                # 2. Realtime por voz em veille (com variações "real time" c/ espaço)
+                _triggers_rt_norm = {kw.replace(" ", "") for kw in _TRIGGERS_REALTIME_ON}
+                t_norm = t_veille.replace(" ", "")
+                if any(kw in t_veille for kw in _TRIGGERS_REALTIME_ON) or \
+                   any(kw in t_norm for kw in _triggers_rt_norm):
+                    await _ativar_modo_realtime()
+                    continue
+
+                # 3. AR por voz em veille
+                _AR_ON_VEILLE = {"realidade aumentada", "modo ar", "liga ar", "abrir ar", "ar mode"}
+                _AR_OFF_VEILLE = {"fechar ar", "desligar ar", "stop ar", "fecha ar"}
+                if any(kw in t_veille for kw in _AR_OFF_VEILLE):
+                    global _ar_active, _ar_task
+                    _ar_active = False
+                    if _ar_task and not _ar_task.done():
+                        _ar_task.cancel()
+                    if CONNECTED_CLIENTS:
+                        msg = json.dumps({"action": "ar_mode", "enabled": False})
+                        await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
+                    continue
+                if any(kw in t_veille for kw in _AR_ON_VEILLE):
+                    if CONNECTED_CLIENTS:
+                        msg = json.dumps({"action": "ar_mode", "enabled": True})
+                        await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
+                    _ar_task = asyncio.create_task(_ar_stream_loop())
+                    continue
+
+                # 4. Wake word normal → ativa e processa comando
+                if contient_wake_word(texte):
+                    await ativar_rony()
+                    commande = nettoyer_commande(texte)
+                    if commande and len(commande.split()) >= 2:
+                        await traiter_message(commande)
                 continue
 
             # ── MODE ACTIF : traiter les commandes ────────────
@@ -2125,15 +2187,23 @@ async def boucle_ecoute() -> None:
 
 # ── Triggers realtime (usados na boucle e no traiter_commande) ─
 _TRIGGERS_REALTIME_ON = {
+    # sem espaço
     "iniciar realtime", "modo realtime", "ativar realtime", "ativa realtime",
     "ligar realtime", "realtime", "escuta contínua", "escuta continua",
     "modo sempre ativo", "sempre ouvindo", "ouvir sempre",
     "start realtime", "enable realtime",
+    # com espaço "real time"
+    "iniciar real time", "modo real time", "ativar real time",
+    "ligar real time", "real time", "ativa real time",
+    "start real time", "enable real time",
 }
 _TRIGGERS_REALTIME_OFF = {
     "desativar realtime", "desativa realtime", "parar realtime", "para realtime",
     "desligar realtime", "modo wake word", "modo normal de escuta",
     "voltar modo normal", "stop realtime", "disable realtime",
+    # com espaço
+    "desativar real time", "parar real time", "desligar real time",
+    "stop real time",
 }
 
 
