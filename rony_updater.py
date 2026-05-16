@@ -227,8 +227,15 @@ def verificar_atualizacao(
             print("[UPDATE] Sem URL de download configurada — notificacao enviada.")
             return
 
-        # ── Diálogo PyWebView ─────────────────────────────────
-        if janela_pywebview and not obrigatoria:
+        # ── Confirmação obrigatória antes de qualquer download ────
+        # Nunca baixa/instala sem consentimento explícito do usuário.
+        confirmado = False
+
+        if obrigatoria:
+            # Atualização crítica: prossegue sem diálogo
+            confirmado = True
+            print(f"[UPDATE] Atualizacao obrigatoria v{versao_nova} — iniciando...")
+        elif janela_pywebview:
             try:
                 msg_js = json.dumps(
                     f"Nova versao do Rony disponivel!\n\n"
@@ -238,18 +245,24 @@ def verificar_atualizacao(
                     f"Deseja atualizar agora?"
                 )
                 aceite = janela_pywebview.evaluate_js(f"confirm({msg_js})")
-                if not aceite:
+                confirmado = bool(aceite)
+                if not confirmado:
                     print("[UPDATE] Atualizacao adiada pelo usuario.")
                     return
             except Exception as e:
-                print(f"[UPDATE] Dialogo PyWebView falhou: {e} — prosseguindo se obrigatoria.")
-                if not obrigatoria:
-                    return
+                print(f"[UPDATE] Dialogo PyWebView falhou: {e} — atualizacao nao sera instalada.")
+                return
+        else:
+            # Modo navegador: WebSocket já notificou o frontend.
+            # Aguarda ação do usuário pela interface — não baixa automaticamente.
+            print("[UPDATE] Notificacao enviada ao frontend via WebSocket — aguardando confirmacao do usuario.")
+            return
 
         # ── Download + instalação ─────────────────────────────
-        installer = _baixar_installer(versao_nova, url_download)
-        if installer:
-            _instalar(installer)
+        if confirmado:
+            installer = _baixar_installer(versao_nova, url_download)
+            if installer:
+                _instalar(installer)
 
     t = threading.Thread(target=_tarefa, daemon=True, name="rony-updater")
     t.start()

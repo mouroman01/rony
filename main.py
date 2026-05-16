@@ -41,7 +41,22 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Version ───────────────────────────────────────────────────
-VERSION = "1.0.33"
+def _ler_versao_local() -> str:
+    """Lê a versão do update_manifest.json local (gerado pelo CI).
+    Isso garante que o updater nunca detecte "nova versão" quando o
+    código já está sincronizado com o repositório via git pull."""
+    try:
+        import json as _json
+        _mf = Path(__file__).parent / "update_manifest.json"
+        if _mf.exists():
+            _v = _json.loads(_mf.read_text(encoding="utf-8")).get("latest_version", "").strip()
+            if _v:
+                return _v
+    except Exception:
+        pass
+    return "1.0.34"
+
+VERSION = _ler_versao_local()
 from rony_paths import RONY_DIR, CONFIG_FILE as _CONFIG_FILE
 
 APP_USER_MODEL_ID = "RONY.AssistentePessoal.Desktop"
