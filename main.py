@@ -1828,6 +1828,107 @@ async def traiter_commande_systeme(texte: str) -> bool:
         await parler(msgs.get(langue, msgs["en"]))
         return True
 
+    # ── GERENCIAR PROCESSOS ───────────────────────────────────
+    from executor_module import listar_processos, matar_processo
+
+    mots_listar_proc = {
+        "lista os processos", "listar processos", "quais processos",
+        "o que está rodando", "o que ta rodando", "processos ativos",
+        "processos em execução", "processos em execucao",
+        "list processes", "show processes", "running processes",
+        "qual processo", "qual programa", "quais programas",
+        "consome mais ram", "consome mais cpu", "usa mais memoria",
+    }
+    mots_matar_proc = {
+        "mata o processo", "matar o processo", "encerra o processo",
+        "kill the process", "terminate", "fecha o processo",
+        "mata ", "matar ", "encerra ", "force quit",
+    }
+
+    if any(m in t for m in mots_listar_proc):
+        await send_web_state("thinking")
+        # Extrai filtro opcional
+        filtro_proc = ""
+        for prep in ["de ", "do ", "da ", "por ", "chamado ", "named "]:
+            if prep in t:
+                filtro_proc = t.split(prep, 1)[-1].strip().split()[0]
+                break
+        procs = await asyncio.get_event_loop().run_in_executor(
+            None, listar_processos, filtro_proc
+        )
+        if not procs:
+            await parler({"pt": "Nenhum processo encontrado.", "en": "No processes found."}.get(langue, "None."))
+        else:
+            top5 = procs[:5]
+            nomes = ", ".join(f"{p['nome']} ({p['ram_mb']}MB)" for p in top5)
+            total = len(procs)
+            msgs = {
+                "pt": f"{total} processos. Top por RAM: {nomes}.",
+                "en": f"{total} processes. Top by RAM: {nomes}.",
+                "es": f"{total} procesos. Top por RAM: {nomes}.",
+            }
+            await parler(msgs.get(langue, msgs["en"]))
+        return True
+
+    if any(m in t for m in mots_matar_proc):
+        alvo_proc = ""
+        for gatilho in sorted(mots_matar_proc, key=len, reverse=True):
+            if gatilho in t:
+                alvo_proc = t.split(gatilho, 1)[-1].strip().split()[0]
+                break
+        if alvo_proc and len(alvo_proc) >= 2:
+            resultado_proc = await asyncio.get_event_loop().run_in_executor(
+                None, matar_processo, alvo_proc
+            )
+            if resultado_proc.get("sucesso"):
+                encerrados = ", ".join(resultado_proc.get("encerrados", []))
+                msgs = {
+                    "pt": f"Processo encerrado: {encerrados}.",
+                    "en": f"Process terminated: {encerrados}.",
+                }
+            else:
+                erro_proc = resultado_proc.get("erro", "erro desconhecido")
+                msgs = {
+                    "pt": f"Não encontrei o processo '{alvo_proc}'.",
+                    "en": f"Process '{alvo_proc}' not found.",
+                }
+            await parler(msgs.get(langue, msgs["en"]))
+            return True
+
+    # ── CPU / RAM em tempo real ───────────────────────────────
+    mots_cpu_ram = {
+        "uso de cpu", "cpu está", "cpu esta", "quanto de cpu",
+        "uso de ram", "ram está", "ram esta", "quanto de ram", "memoria ram",
+        "cpu usage", "ram usage", "memory usage",
+        "temperatura do pc", "temperatura do processador",
+        "bateria", "carga da bateria", "battery",
+    }
+    if any(m in t for m in mots_cpu_ram):
+        await send_web_state("thinking")
+        info_rt = await asyncio.get_event_loop().run_in_executor(None, info_sistema_completa)
+        cpu_rt = info_rt.get("cpu_percent", "?")
+        ram_rt = info_rt.get("ram_percent", "?")
+        ram_gb_rt = info_rt.get("ram_usada_gb", "?")
+        ram_tot_rt = info_rt.get("ram_total_gb", "?")
+
+        if any(k in t for k in ("bateria", "battery")):
+            try:
+                import psutil as _ps
+                bat = _ps.sensors_battery()
+                if bat:
+                    perc = round(bat.percent)
+                    estado = "carregando" if bat.power_plugged else "na bateria"
+                    await parler({"pt": f"Bateria em {perc}%, {estado}.", "en": f"Battery at {perc}%, {estado}."}.get(langue, f"Battery: {perc}%"))
+                else:
+                    await parler({"pt": "Sem bateria detectada (desktop?).", "en": "No battery detected."}.get(langue, "No battery."))
+            except Exception:
+                await parler({"pt": "Não consigo ler a bateria.", "en": "Can't read battery."}.get(langue, "Battery unavailable."))
+        elif any(k in t for k in ("cpu", "processador")):
+            await parler({"pt": f"CPU em {cpu_rt}%.", "en": f"CPU at {cpu_rt}%.", "es": f"CPU al {cpu_rt}%."}.get(langue, f"CPU: {cpu_rt}%"))
+        else:
+            await parler({"pt": f"RAM: {ram_gb_rt} de {ram_tot_rt} GB ({ram_rt}% usada).", "en": f"RAM: {ram_gb_rt}/{ram_tot_rt} GB ({ram_rt}% used)."}.get(langue, f"RAM: {ram_rt}%"))
+        return True
+
     return False
 
 
