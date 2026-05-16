@@ -92,46 +92,121 @@ def _site_search_url(site: str, consulta: str) -> str:
 
 
 def _extrair_consulta_youtube(texto: str) -> str:
+    """Extrai a query de busca do YouTube a partir do comando de voz."""
     t = _strip_wake_word(texto)
-    padroes = [
-        r"(?:abre|abra|abrir|toca|toque|coloca|coloque|reproduz|reproduzir)\s+(?:um\s+)?(?:video|videos|vÃ­deo|vÃ­deos)\s+(?:no youtube\s+)?(?:sobre|de|do|da)?\s*(.+)",
-        r"(?:abre|abra|abrir|toca|toque|coloca|coloque|reproduz|reproduzir)\s+(?:no youtube\s+)?(.+?)\s+(?:no youtube)$",
-        r"(?:youtube)\s+(?:abre|abra|abrir|toca|toque|coloca|coloque|reproduz|reproduzir)\s+(?:um\s+)?(?:video|videos|vÃ­deo|vÃ­deos)?\s*(?:sobre|de|do|da)?\s*(.+)",
-    ]
-    for padrao in padroes:
-        m = re.search(padrao, t)
-        if m:
-            consulta = m.group(1).strip(" .,!?'\"")
-            consulta = re.sub(r"^(?:sobre|de|do|da)\s+", "", consulta).strip()
-            if consulta and consulta not in {"youtube", "video", "videos"}:
-                return consulta
+
+    # Remove sufixos de plataforma antes de extrair a query
+    for sufixo in ("no youtube", "no yt", "pelo youtube", "no youtube music",
+                   "no you tube", "youtube"):
+        t = re.sub(rf"\s+{re.escape(sufixo)}\s*$", "", t).strip()
+
+    # Gatilhos de reprodução (mais abrangentes, sem encoding corrompido)
+    gatilhos = (
+        "toca", "toque", "tocar", "play", "reproduz", "reproduzir", "reproduza",
+        "coloca", "coloque", "colocar", "bota", "bote", "botar",
+        "abre", "abra", "abrir", "open", "mostra", "mostre", "mostrar",
+        "quero ver", "quero ouvir", "quero assistir",
+        "me mostra", "me coloca", "me bota", "me toca",
+    )
+    tipos = (
+        "video", "videos", "vídeo", "vídeos",
+        "musica", "música", "musicas", "músicas",
+        "song", "music", "clip", "clipe",
+    )
+    preposicoes = ("sobre", "de", "do", "da", "dos", "das", "com", "of", "about")
+
+    for gatilho in sorted(gatilhos, key=len, reverse=True):
+        if t.startswith(gatilho + " ") or f" {gatilho} " in t:
+            resto = t[len(gatilho):].strip() if t.startswith(gatilho) else t.split(f" {gatilho} ", 1)[-1].strip()
+            # Remove artigo de tipo se presente (ex: "um vídeo de")
+            for tipo in tipos:
+                resto = re.sub(rf"^(?:um |uma |o |a )?{re.escape(tipo)}\s*", "", resto).strip()
+            # Remove preposição inicial
+            for prep in preposicoes:
+                resto = re.sub(rf"^{re.escape(prep)}\s+", "", resto).strip()
+            if resto and len(resto) >= 2 and resto not in {"youtube", "yt"}:
+                return resto
+
     return ""
 
 
-def _buscar_video_youtube(texto: str) -> Optional[str]:
-    t = _strip_wake_word(texto)
-    if "youtube" not in t and not any(p in t for p in ("video", "videos", "vÃ­deo", "vÃ­deos")):
+def _buscar_video_youtube_api(consulta: str) -> Optional[str]:
+    """
+    Usa a YouTube Data API v3 para encontrar o primeiro vídeo relevante.
+    Retorna a URL direta de watch ou None se falhar.
+    """
+    api_key = os.getenv("YOUTUBE_API_KEY", "")
+    if not api_key or api_key.startswith("VOTRE"):
         return None
-    if any(p in t for p in ("pesquisa", "pesquisar", "procura", "procurar", "busca", "buscar")):
+    try:
+        import urllib.request as _req
+        q = urllib.parse.quote_plus(consulta)
+        url_api = (
+            f"https://www.googleapis.com/youtube/v3/search"
+            f"?part=snippet&q={q}&type=video&maxResults=3"
+            f"&videoCategoryId=0&key={api_key}"
+        )
+        req = _req.Request(url_api, headers={"User-Agent": "Rony/1.0"})
+        with _req.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        items = data.get("items", [])
+        if not items:
+            return None
+        video_id = items[0]["id"]["videoId"]
+        titulo   = items[0]["snippet"]["title"]
+        url_watch = f"https://www.youtube.com/watch?v={video_id}&autoplay=1"
+        print(f"[YT API] Video encontrado: {titulo} → {url_watch}")
+        return url_watch
+    except Exception as e:
+        print(f"[YT API] Falha: {e}")
+        return None
+
+
+def _buscar_video_youtube(texto: str) -> Optional[str]:
+    """
+    Detecta intenção de reprodução no YouTube e abre o vídeo.
+    Usa YouTube Data API v3 → fallback para página de busca.
+    """
+    t = _strip_wake_word(texto)
+
+    # Gatilhos que indicam intenção de YouTube
+    _YOUTUBE_TRIGGERS = {
+        "youtube", "yt", "you tube",
+        "video", "vídeo", "videos", "vídeos",
+        "toca", "tocar", "reproduz", "reproduzir",
+        "quero ver", "quero assistir", "me mostra um video",
+        "me coloca", "me bota",
+    }
+
+    # Detecta contexto YouTube
+    tem_contexto_yt = (
+        "youtube" in t or "you tube" in t or
+        any(g in t for g in ("toca ", "toque ", "reproduz", "quero ver", "quero assistir",
+                              "me coloca ", "me bota ", "bota ", "coloca ")) and
+        any(p in t for p in ("video", "vídeo", "musica", "música", "clip", "clipe", "youtube"))
+    )
+
+    if not tem_contexto_yt:
+        return None
+
+    # Não captura pesquisas simples ("pesquisa no youtube")
+    if any(p in t for p in ("pesquisa", "pesquisar", "procura", "procurar",
+                             "busca", "buscar", "search")):
         return None
 
     consulta = _extrair_consulta_youtube(t)
-    if not consulta or len(consulta) < 3:
+    if not consulta or len(consulta) < 2:
         return None
 
-    try:
-        resultados = buscar_web(f"site:youtube.com/watch {consulta}", limite=5)
-        for item in resultados:
-            url = item.get("url", "")
-            titulo = item.get("title", "").strip()
-            if "youtube.com/watch" in url or "youtu.be/" in url:
-                webbrowser.open(url)
-                return f"Abrindo no YouTube: {titulo or consulta}."
-    except Exception:
-        pass
+    # 1. Tenta YouTube Data API (resultado direto)
+    url = _buscar_video_youtube_api(consulta)
+    if url:
+        webbrowser.open(url)
+        return f"Reproduzindo no YouTube: {consulta}."
 
+    # 2. Fallback: abre a página de busca do YouTube
     webbrowser.open(_site_search_url("youtube", consulta))
-    return f"Nao consegui escolher um video com seguranca, entao abri a busca do YouTube por {consulta}."
+    return f"Abrindo busca no YouTube por: {consulta}."
 
 
 def _extrair_consulta_web(texto: str) -> str:
