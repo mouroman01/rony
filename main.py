@@ -2140,6 +2140,14 @@ async def ws_handler(websocket) -> None:
                         _ar_task.cancel()
                     await websocket.send(json.dumps({"action": "ar_stopped"}))
 
+                elif action == "realtime_on":
+                    # Botão realtime do frontend → ativa Python-side realtime
+                    # (sem getUserMedia — sem popup de permissão de microfone)
+                    await _ativar_modo_realtime()
+
+                elif action == "realtime_off":
+                    await _desativar_modo_realtime()
+
                 elif action == "memoire_list":
                     faits = lister_faits(20)
                     await websocket.send(json.dumps({"action": "memoire_data", "faits": faits}))
@@ -2456,6 +2464,9 @@ async def _desativar_modo_realtime() -> None:
     _modo_realtime = False
     await desativar_rony()
     print("[RONY] 💤 MODO REALTIME DESATIVADO — voltando ao wake word.")
+    if CONNECTED_CLIENTS:
+        msg = json.dumps({"action": "realtime", "ativo": False})
+        await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
     msgs = {
         "pt": "Modo realtime desativado. Me chame com 'Rony' quando precisar.",
         "en": "Realtime mode off. Say 'Rony' to wake me up.",

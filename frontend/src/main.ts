@@ -263,6 +263,16 @@ function handleMessage(data: Record<string, unknown>): void {
     case "ar_stopped":
       break;
 
+    case "realtime":
+      // Python confirma estado do realtime (ativado/desativado)
+      setRealtimeActive(!!(data.ativo));
+      if (data.ativo) {
+        applyState("listening");
+      } else {
+        applyState("idle");
+      }
+      break;
+
     case "pong":
       break;
   }
@@ -495,6 +505,14 @@ async function startRealtime(): Promise<void> {
     stopRealtime();
     return;
   }
+  // Usa Python-side realtime (sem popup de permissão de microfone)
+  errorEl.textContent = "";
+  send({ action: "realtime_on" });
+  setRealtimeActive(true);
+  applyState("listening");
+  showSubtitle("Modo realtime ativo. Estou ouvindo continuamente.");
+  return;
+  // Código WebRTC abaixo preservado como fallback se necessário no futuro
   if (!navigator.mediaDevices?.getUserMedia) {
     errorEl.textContent = "Microfone realtime exige navegador seguro";
     return;
@@ -597,6 +615,8 @@ function stopRealtime(): void {
   realtimeStream = null;
   realtimeAudio = null;
   setRealtimeActive(false);
+  // Desativa realtime Python-side e reativa microfone normal
+  send({ action: "realtime_off" });
   send({ action: "micro", enabled: true });
   applyState("idle");
 }
