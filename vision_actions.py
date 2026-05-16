@@ -14,7 +14,7 @@ from camera_module import (
 from vision_module import (
     analyser_ecran_ia,
     capturer_et_sauvegarder,
-    clicar_coordonnees,
+    cliquer_coordonnees as clicar_coordonnees,
     taper_texte,
     appuyer_touche,
     raccourci,
