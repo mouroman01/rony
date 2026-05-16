@@ -41,7 +41,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Version ───────────────────────────────────────────────────
-VERSION = "1.0.0"
+VERSION = "1.0.33"
 from rony_paths import RONY_DIR, CONFIG_FILE as _CONFIG_FILE
 
 APP_USER_MODEL_ID = "RONY.AssistentePessoal.Desktop"
