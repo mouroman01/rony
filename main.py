@@ -872,6 +872,7 @@ async def traiter_commande_systeme(texte: str) -> bool:
     Traite les commandes système directes (sans IA).
     Retourne True si la commande a été gérée.
     """
+    global _ar_active, _ar_task
     t = texte.lower().strip()
     langue = get_langue()
 
@@ -890,7 +891,6 @@ async def traiter_commande_systeme(texte: str) -> bool:
 
     if intent.action in {"fechar", "desligar", "parar"} and intent.target == "camera":
         # Para o streaming AR Python + fecha app Windows Camera se aberta
-        global _ar_active, _ar_task
         _ar_active = False
         if _ar_task and not _ar_task.done():
             _ar_task.cancel()
@@ -1019,7 +1019,6 @@ async def traiter_commande_systeme(texte: str) -> bool:
         "desligar ar", "stop ar", "close ar",
     }
     if any(m in t for m in mots_ar_off):
-        global _ar_active, _ar_task
         _ar_active = False
         if _ar_task and not _ar_task.done():
             _ar_task.cancel()
