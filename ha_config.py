@@ -19,10 +19,47 @@ HA_HEADERS = {
     "Content-Type" : "application/json",
 }
 
+# ── Autodetecção de localização por IP ───────────────────────
+def _autodetectar_localizacao() -> tuple[str, float, float]:
+    """
+    Detecta cidade/lat/lon a partir do IP público.
+    Retorna (cidade, lat, lon). Fallback: São Paulo.
+    """
+    try:
+        r = requests.get("https://ipapi.co/json/", timeout=5)
+        if r.status_code == 200:
+            d = r.json()
+            cidade = d.get("city", "") or d.get("region", "") or "São Paulo"
+            lat    = float(d.get("latitude",  -23.5505))
+            lon    = float(d.get("longitude", -46.6333))
+            return cidade, lat, lon
+    except Exception:
+        pass
+    try:
+        r2 = requests.get("https://ip-api.com/json/?fields=city,lat,lon", timeout=5)
+        if r2.status_code == 200:
+            d2 = r2.json()
+            cidade = d2.get("city", "São Paulo")
+            lat    = float(d2.get("lat", -23.5505))
+            lon    = float(d2.get("lon", -46.6333))
+            return cidade, lat, lon
+    except Exception:
+        pass
+    return "São Paulo", -23.5505, -46.6333
+
 # ── Ville et coordonnées par défaut ───────────────────────────
-VILLE_PAR_DEFAUT = os.getenv("VILLE_DEFAUT", "Paris")
-LAT_PAR_DEFAUT   = float(os.getenv("LAT_DEFAUT", "48.8566"))
-LON_PAR_DEFAUT   = float(os.getenv("LON_DEFAUT", "2.3522"))
+# Prioridade: 1) .env (VILLE_DEFAUT) → 2) auto-detecção por IP → 3) São Paulo
+_VILLE_ENV = os.getenv("VILLE_DEFAUT", "").strip()
+_LAT_ENV   = os.getenv("LAT_DEFAUT", "").strip()
+_LON_ENV   = os.getenv("LON_DEFAUT", "").strip()
+
+if _VILLE_ENV:
+    VILLE_PAR_DEFAUT = _VILLE_ENV
+    LAT_PAR_DEFAUT   = float(_LAT_ENV)  if _LAT_ENV  else -23.5505
+    LON_PAR_DEFAUT   = float(_LON_ENV)  if _LON_ENV  else -46.6333
+else:
+    VILLE_PAR_DEFAUT, LAT_PAR_DEFAUT, LON_PAR_DEFAUT = _autodetectar_localizacao()
+    print(f"[RONY] 📍 Localização auto-detectada: {VILLE_PAR_DEFAUT} ({LAT_PAR_DEFAUT:.4f}, {LON_PAR_DEFAUT:.4f})")
 
 # ═══════════════════════════════════════════════════════════════
 #  SECTION 1 — LUMIÈRES
