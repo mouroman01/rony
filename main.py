@@ -1134,8 +1134,33 @@ async def traiter_commande_systeme(texte: str) -> bool:
                 alvo_str = t.split(prep, 1)[-1].strip().strip('"').strip("'")
                 break
         if not alvo_str and ("vault" in t or "obsidian" in t):
-            vault_env = os.getenv("OBSIDIAN_VAULT_PATH", "")
-            alvo_str = vault_env if vault_env else str(Path.home() / "Documents" / "Obsidian")
+            vault_env = os.getenv("OBSIDIAN_VAULT_PATH", "").strip()
+            if vault_env:
+                alvo_str = vault_env
+            else:
+                # Auto-detect Obsidian vault in common Windows locations
+                _vault_candidates = [
+                    Path.home() / "Documents" / "Obsidian",
+                    Path.home() / "Obsidian",
+                    Path.home() / "OneDrive" / "Obsidian",
+                    Path.home() / "Desktop" / "Obsidian",
+                    Path("C:/Users") / os.getenv("USERNAME", "User") / "Documents" / "Obsidian",
+                ]
+                # Also look for .obsidian marker in home subfolders
+                _vault_found = None
+                for cand in _vault_candidates:
+                    if cand.is_dir():
+                        _vault_found = cand
+                        break
+                if not _vault_found:
+                    # Scan Documents for any folder with .obsidian inside
+                    _docs = Path.home() / "Documents"
+                    if _docs.is_dir():
+                        for sub in _docs.iterdir():
+                            if sub.is_dir() and (sub / ".obsidian").is_dir():
+                                _vault_found = sub
+                                break
+                alvo_str = str(_vault_found) if _vault_found else str(Path.home() / "Documents" / "Obsidian")
         caminho_mapa = resoudre_chemin(alvo_str) if alvo_str else None
         if caminho_mapa and caminho_mapa.is_dir():
             resultado_mapa = mapear_pasta_completo(caminho_mapa, lingua=langue)
