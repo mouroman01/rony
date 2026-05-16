@@ -38,7 +38,7 @@ const langList        = document.getElementById("lang-list")         as HTMLDivE
 const realtimeBtn     = document.getElementById("realtime-button")   as HTMLButtonElement;
 const arBtn           = document.getElementById("ar-button")         as HTMLButtonElement;
 const arPanel         = document.getElementById("ar-panel")          as HTMLDivElement;
-const arVideo         = document.getElementById("ar-video")          as HTMLVideoElement;
+const arVideo         = document.getElementById("ar-video")          as HTMLImageElement;
 const arOverlay       = document.getElementById("ar-overlay")        as HTMLCanvasElement;
 const arStatus        = document.getElementById("ar-status")         as HTMLSpanElement;
 const arClose         = document.getElementById("ar-close")          as HTMLButtonElement;
@@ -142,10 +142,7 @@ let realtimeDc: RTCDataChannel | null = null;
 let realtimeStream: MediaStream | null = null;
 let realtimeAudio: HTMLAudioElement | null = null;
 let realtimeActive = false;
-let arStream: MediaStream | null = null;
 let arActive = false;
-let arBusy = false;
-let arTimer: number | null = null;
 
 type ArBox = {
   label?: string;
@@ -249,10 +246,21 @@ function handleMessage(data: Record<string, unknown>): void {
 
     case "ar_mode":
       if (data.enabled) {
-        void startArMode();
+        startArMode();
       } else {
         stopArMode();
       }
+      break;
+
+    case "ar_frame":
+      handleArFrame(data);
+      break;
+
+    case "ar_started":
+      arStatus.textContent = "analisando...";
+      break;
+
+    case "ar_stopped":
       break;
 
     case "pong":
@@ -439,86 +447,40 @@ function drawArBoxes(faces: ArBox[], objects: ArBox[], sourceWidth: number, sour
   arStatus.textContent = `${faces.length} rosto(s) · ${objects.length} objeto(s)`;
 }
 
-async function analyzeArFrame(): Promise<void> {
-  if (!arActive || arBusy || arVideo.readyState < 2) return;
-  arBusy = true;
-  try {
-    const sourceWidth = arVideo.videoWidth || 640;
-    const sourceHeight = arVideo.videoHeight || 360;
-    const targetWidth = 640;
-    const targetHeight = Math.max(1, Math.round(sourceHeight * (targetWidth / sourceWidth)));
-    const frameCanvas = document.createElement("canvas");
-    frameCanvas.width = targetWidth;
-    frameCanvas.height = targetHeight;
-    const frameCtx = frameCanvas.getContext("2d");
-    if (!frameCtx) return;
-
-    frameCtx.drawImage(arVideo, 0, 0, targetWidth, targetHeight);
-    const image_b64 = frameCanvas.toDataURL("image/jpeg", 0.72);
-    const response = await fetch("/api/ar-frame", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image_b64, langue: currentLang }),
-    });
-    const data = await response.json();
-    if (!response.ok || !data.ok) {
-      arStatus.textContent = data.error || "AR indisponivel";
-      return;
-    }
-    drawArBoxes(data.faces || [], data.objects || [], targetWidth, targetHeight);
-  } catch (_) {
-    arStatus.textContent = "AR indisponivel";
-  } finally {
-    arBusy = false;
-  }
-}
-
-async function startArMode(): Promise<void> {
+function startArMode(): void {
   if (arActive) return;
-  if (!navigator.mediaDevices?.getUserMedia) {
-    errorEl.textContent = "Camera indisponivel nesta interface.";
-    return;
-  }
-
-  try {
-    errorEl.textContent = "";
-    arStatus.textContent = "iniciando camera...";
-    arPanel.classList.remove("hidden");
-    arBtn.classList.add("is-realtime");
-    arStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-      audio: false,
-    });
-    arVideo.srcObject = arStream;
-    await arVideo.play();
-    arActive = true;
-    arStatus.textContent = "analisando...";
-    resizeArOverlay();
-    await analyzeArFrame();
-    arTimer = window.setInterval(() => { void analyzeArFrame(); }, 900);
-  } catch (error) {
-    stopArMode();
-    errorEl.textContent = error instanceof Error && error.name === "NotAllowedError"
-      ? "Permita o acesso a camera para usar a realidade aumentada."
-      : "Nao consegui iniciar a realidade aumentada.";
-  }
+  errorEl.textContent = "";
+  arStatus.textContent = "iniciando camera...";
+  arPanel.classList.remove("hidden");
+  arBtn.classList.add("is-realtime");
+  arActive = true;
+  // Solicita streaming da câmera ao backend Python via WebSocket
+  send({ action: "ar_start" });
 }
 
 function stopArMode(): void {
-  if (arTimer !== null) {
-    window.clearInterval(arTimer);
-    arTimer = null;
-  }
-  arStream?.getTracks().forEach((track) => track.stop());
-  arStream = null;
-  arVideo.pause();
-  arVideo.srcObject = null;
+  if (!arActive) return;
   arActive = false;
-  arBusy = false;
+  send({ action: "ar_stop" });
+  arVideo.src = "";
   arPanel.classList.add("hidden");
   arBtn.classList.remove("is-realtime");
+  arStatus.textContent = "AR";
   const ctx = arOverlay.getContext("2d");
   ctx?.clearRect(0, 0, arOverlay.width, arOverlay.height);
+}
+
+function handleArFrame(data: Record<string, unknown>): void {
+  if (!arActive) return;
+  const imgSrc = data.image_b64 as string;
+  if (imgSrc && arVideo.src !== imgSrc) {
+    arVideo.src = imgSrc;
+  }
+  const faces   = (data.faces   as ArBox[]) || [];
+  const objects = (data.objects as ArBox[]) || [];
+  // Dimensoes do frame capturado pelo Python (640px largura padrao)
+  drawArBoxes(faces, objects, 640, Math.round((arVideo.naturalHeight || 360)));
+  resizeArOverlay();
 }
 
 // ── Événements boutons ────────────────────────────────────────

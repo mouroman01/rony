@@ -182,6 +182,10 @@ _micro_actif   = True
 historique_ia  = []    # Contexte Gemini actuel
 _intent_router = IntentRouter()
 
+# ── Realidade Aumentada (streaming Python → WebSocket) ────────
+_ar_active: bool = False
+_ar_task: asyncio.Task | None = None
+
 # ── Wake word — modo de espera / ativo ───────────────────────
 _modo_ativo          = False   # False = veille, True = actif
 _modo_realtime       = False   # True = escuta contínua sem wake word
@@ -1773,6 +1777,71 @@ async def traiter_message(texte: str) -> None:
 #  HANDLER WEBSOCKET
 # ═══════════════════════════════════════════════════════════════
 
+# ── Streaming de Realidade Aumentada via WebSocket ────────────
+async def _ar_stream_loop() -> None:
+    """
+    Captura frames da webcam via OpenCV, roda detecção de rostos/objetos
+    e transmite para todos os clientes WebSocket conectados.
+    Roda em task asyncio separada enquanto _ar_active=True.
+    Taxa: ~2.5 fps (frame a cada 400ms).
+    """
+    global _ar_active
+    _ar_active = True
+    print("[AR] Streaming iniciado.")
+    try:
+        while _ar_active:
+            # Captura em executor para não bloquear o loop asyncio
+            img_bytes = await asyncio.get_event_loop().run_in_executor(
+                None, capturar_camera
+            )
+            if not img_bytes:
+                await asyncio.sleep(0.5)
+                continue
+
+            lingua = get_langue() or "pt"
+
+            # Detecção de rostos e objetos (em executor)
+            def _detectar():
+                rostos = detectar_rostos(img_bytes)
+                nomes = reconhecer_rostos(img_bytes) if rostos else []
+                pessoas = []
+                for idx, rosto in enumerate(rostos):
+                    nome = nomes[idx] if idx < len(nomes) else "desconhecido"
+                    pessoas.append({
+                        "label": nome if nome != "desconhecido" else "rosto",
+                        "confidence": None,
+                        **rosto,
+                    })
+                objetos = detectar_objetos(img_bytes, lingua=lingua)
+                return pessoas, objetos[:20]
+
+            pessoas, objetos = await asyncio.get_event_loop().run_in_executor(
+                None, _detectar
+            )
+
+            img_b64 = "data:image/jpeg;base64," + base64.b64encode(img_bytes).decode()
+            payload = json.dumps({
+                "action"   : "ar_frame",
+                "image_b64": img_b64,
+                "faces"    : pessoas,
+                "objects"  : objetos,
+                "summary"  : {"faces": len(pessoas), "objects": len(objetos)},
+            })
+
+            if CONNECTED_CLIENTS:
+                await asyncio.gather(
+                    *[ws.send(payload) for ws in CONNECTED_CLIENTS],
+                    return_exceptions=True,
+                )
+
+            await asyncio.sleep(0.4)   # ~2.5 fps
+    except asyncio.CancelledError:
+        pass
+    finally:
+        _ar_active = False
+        print("[AR] Streaming encerrado.")
+
+
 async def ws_handler(websocket) -> None:
     CONNECTED_CLIENTS.add(websocket)
     print(f"[WS] Client connecté. Total : {len(CONNECTED_CLIENTS)}")
@@ -1824,6 +1893,18 @@ async def ws_handler(websocket) -> None:
                         prompt = data.get("prompt", None)
                         analyse = await analyser_ecran_ia(_client_gemini, prompt, get_langue())
                         await websocket.send(json.dumps({"action": "vision_result", "text": analyse}))
+
+                elif action == "ar_start":
+                    global _ar_task, _ar_active
+                    if not _ar_active:
+                        _ar_task = asyncio.create_task(_ar_stream_loop())
+                    await websocket.send(json.dumps({"action": "ar_started"}))
+
+                elif action == "ar_stop":
+                    _ar_active = False
+                    if _ar_task and not _ar_task.done():
+                        _ar_task.cancel()
+                    await websocket.send(json.dumps({"action": "ar_stopped"}))
 
                 elif action == "memoire_list":
                     faits = lister_faits(20)
