@@ -137,6 +137,10 @@ from jarvis_actions import executar_intencao_rapida
 from vision_actions import executar_acao_visao
 from intent_router import IntentRouter
 from file_editor import editar_arquivo_ia
+from obsidian_manager import (
+    detectar_acao_obsidian, criar_nota_por_voz, buscar_notas,
+    organizar_pasta_em_vault, vault_info, get_vault,
+)
 from camera_module import (
     ver_camera, capturar_e_salvar, aprender_rosto,
     resposta_o_que_voce_ve, resposta_tem_alguem, resposta_o_que_e_isso,
@@ -938,6 +942,60 @@ async def traiter_commande_systeme(texte: str) -> bool:
         )
         await parler(resposta_arquivo)
         return True
+
+    # ── OBSIDIAN — Notas / Organização ───────────────────────
+    acao_obs = detectar_acao_obsidian(texte)
+    if acao_obs:
+        await send_web_state("thinking")
+        if acao_obs == "criar_nota":
+            resp_obs = await asyncio.get_event_loop().run_in_executor(
+                None, criar_nota_por_voz, texte, None, langue
+            )
+            await parler(resp_obs)
+            return True
+
+        elif acao_obs == "buscar_nota":
+            consulta_obs = texte
+            for prep in ("busca a nota ", "busca no obsidian ", "procura a nota ",
+                         "procura no obsidian ", "encontra a nota ", "abre a nota ",
+                         "search note ", "find note "):
+                if prep in t:
+                    consulta_obs = t.split(prep, 1)[-1].strip()
+                    break
+            resultados_obs = await asyncio.get_event_loop().run_in_executor(
+                None, buscar_notas, consulta_obs
+            )
+            if resultados_obs:
+                titulos = ", ".join(r["titulo"] for r in resultados_obs[:3])
+                resp_obs = {"pt": f"Encontrei {len(resultados_obs)} nota(s): {titulos}.",
+                            "en": f"Found {len(resultados_obs)} note(s): {titulos}."}.get(langue, titulos)
+            else:
+                resp_obs = {"pt": "Não encontrei notas com esse termo.",
+                            "en": "No notes found with that term."}.get(langue, "Not found.")
+            await parler(resp_obs)
+            return True
+
+        elif acao_obs == "organizar":
+            # Detecta qual pasta organizar
+            alvo_org = str(Path.home() / "Documents")
+            for prep in ("organiza ", "sincroniza ", "mapeia "):
+                if prep in t:
+                    alvo_org = t.split(prep, 1)[-1].strip()
+                    break
+            from file_manager import resoudre_chemin as _res_cam
+            pasta_org = _res_cam(alvo_org) or Path(alvo_org)
+            resultado_org = await asyncio.get_event_loop().run_in_executor(
+                None, organizar_pasta_em_vault, pasta_org, None, _client_gemini, langue
+            )
+            await parler(resultado_org.get("resumo_voz", "Organizado."))
+            return True
+
+        elif acao_obs == "status":
+            resp_obs = await asyncio.get_event_loop().run_in_executor(
+                None, vault_info, langue
+            )
+            await parler(resp_obs)
+            return True
 
     resposta_visao = await executar_acao_visao(
         texte,
