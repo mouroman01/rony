@@ -557,22 +557,32 @@ async def parler(texte: str) -> None:
     prosody  = get_prosody()
     tmp      = RONY_DIR / f"rony_tts_{int(time.time()*1000)}.mp3"
 
-    try:
-        communicate = edge_tts.Communicate(
-            texte_tts,
-            voice=voix,
-            rate=prosody.get("rate", "-5%"),
-            pitch=prosody.get("pitch", "+0Hz"),
-        )
-        await communicate.save(str(tmp))
+    # ── Mapa de voz OpenAI por idioma ────────────────────────────
+    # Vozes: alloy, echo, fable, onyx, nova, shimmer
+    _OPENAI_VOICE_MAP = {
+        "pt": "nova",     # Quente, natural — ótima para PT
+        "en": "nova",
+        "fr": "shimmer",
+        "es": "nova",
+        "de": "onyx",
+        "it": "shimmer",
+        "ja": "shimmer",
+        "zh": "shimmer",
+        "ru": "onyx",
+        "ko": "shimmer",
+    }
 
+    async def _tocar_mp3(caminho: "Path") -> None:
+        """Reproduz o MP3 gerado via pygame ou envia ao frontend."""
         if _skip_pc_audio and CONNECTED_CLIENTS:
-            with open(tmp, "rb") as f:
+            with open(caminho, "rb") as f:
                 audio_b64 = base64.b64encode(f.read()).decode("utf-8")
-            msg = json.dumps({"action": "audio", "text": texte_tts, "audio_b64": audio_b64, "langue": get_langue()})
-            await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS], return_exceptions=True)
+            msg = json.dumps({"action": "audio", "text": texte_tts,
+                              "audio_b64": audio_b64, "langue": get_langue()})
+            await asyncio.gather(*[ws.send(msg) for ws in CONNECTED_CLIENTS],
+                                 return_exceptions=True)
         elif pygame and pygame.mixer.get_init():
-            pygame.mixer.music.load(str(tmp))
+            pygame.mixer.music.load(str(caminho))
             pygame.mixer.music.play()
             while pygame.mixer.music.get_busy():
                 if STOP_PARLER:
@@ -586,24 +596,62 @@ async def parler(texte: str) -> None:
         else:
             print(f"[RONY] {texte_tts}")
 
-    except Exception as e:
-        print(f"[TTS] Erreur : {e}")
-    finally:
+    gerado = False
+
+    # ── Tentativa 1: OpenAI TTS (tts-1-hd — voz muito mais humana) ──
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    if openai_key and not openai_key.startswith("sk-VOTRE") and _client_openai:
+        try:
+            lingua_atual = get_langue()
+            openai_voice = _OPENAI_VOICE_MAP.get(lingua_atual, "nova")
+            resp = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: _client_openai.audio.speech.create(
+                    model="tts-1-hd",
+                    voice=openai_voice,
+                    input=texte_tts,
+                    response_format="mp3",
+                ),
+            )
+            tmp.write_bytes(resp.content)
+            await _tocar_mp3(tmp)
+            gerado = True
+        except Exception as e_openai:
+            print(f"[TTS] OpenAI TTS falhou, usando edge-tts: {e_openai}")
+
+    # ── Tentativa 2: edge-tts (fallback) ─────────────────────────
+    if not gerado:
+        try:
+            communicate = edge_tts.Communicate(
+                texte_tts,
+                voice=voix,
+                rate=prosody.get("rate", "-5%"),
+                pitch=prosody.get("pitch", "+0Hz"),
+            )
+            await communicate.save(str(tmp))
+            await _tocar_mp3(tmp)
+        except Exception as e:
+            print(f"[TTS] Erro edge-tts: {e}")
+
+    if not gerado and not tmp.exists():
+        print(f"[RONY] {texte_tts}")
+
+    # ── Cleanup ──────────────────────────────────────────────────
+    try:
         speak_volume = 0.0
         is_speaking  = False
         STOP_PARLER  = False
-        try:
-            if pygame and pygame.mixer.get_init():
-                pygame.mixer.music.unload()
-        except Exception:
-            pass
-        await asyncio.sleep(0.1)
-        try:
-            if tmp.exists():
-                tmp.unlink()
-        except Exception:
-            pass
-        await send_web_state("idle")
+        if pygame and pygame.mixer.get_init():
+            pygame.mixer.music.unload()
+    except Exception:
+        pass
+    await asyncio.sleep(0.1)
+    try:
+        if tmp.exists():
+            tmp.unlink()
+    except Exception:
+        pass
+    await send_web_state("idle")
 
 
 builtins.parler = parler
