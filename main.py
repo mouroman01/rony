@@ -104,7 +104,7 @@ from PIL import Image
 
 # ── Modules Rony ─────────────────────────────────────────────
 from language_manager import (
-    get_langue, get_voix, get_label, get_reponse, get_nom_langue,
+    get_langue, get_voix, get_prosody, get_label, get_reponse, get_nom_langue,
     traiter_langue_auto, definir_langue, langues_disponibles, NOMS_LANGUES,
 )
 from memory_manager import (
@@ -506,11 +506,43 @@ builtins.send_web_volume = send_web_volume
 #  TTS — TEXT TO SPEECH
 # ═══════════════════════════════════════════════════════════════
 
+def _preparar_texto_tts(texto: str) -> str:
+    """
+    Pré-processa o texto para soar mais natural no TTS.
+    Remove artefatos Markdown, normaliza pontuação e adiciona pausas naturais.
+    """
+    import unicodedata
+    # Remove Markdown: **, __, *, _, #, `, ~, |, >
+    texto = re.sub(r"[*#`~|>_]{1,3}", "", texto)
+    # Remove links Markdown [texto](url) → texto
+    texto = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", texto)
+    # Remove URLs brutas
+    texto = re.sub(r"https?://\S+", "", texto)
+    # Remove emojis deixando espaço (não fala emoji)
+    texto = re.sub(r"[\U00010000-\U0010ffff]", " ", texto, flags=re.UNICODE)
+    texto = re.sub(r"[\U00002600-\U000027BF]", " ", texto, flags=re.UNICODE)
+    # Listas numeradas "1." → pausa com vírgula
+    texto = re.sub(r"^\s*\d+\.\s+", ", ", texto, flags=re.MULTILINE)
+    # Listas com hífen/bullet → pausa
+    texto = re.sub(r"^\s*[-•]\s+", ", ", texto, flags=re.MULTILINE)
+    # Múltiplas linhas em branco → ponto final (pausa longa)
+    texto = re.sub(r"\n{2,}", ". ", texto)
+    texto = re.sub(r"\n", " ", texto)
+    # Pontuação dupla
+    texto = re.sub(r"\.{2,}", ".", texto)
+    texto = re.sub(r"\s{2,}", " ", texto)
+    # Normaliza caracteres unicode
+    texto = unicodedata.normalize("NFC", texto)
+    return texto.strip()
+
+
 async def parler(texte: str) -> None:
     global is_speaking, speak_volume, STOP_PARLER
 
-    # Nettoyage Markdown
-    texte_tts = re.sub(r"[\*\#\`]", "", texte).strip()
+    # Pré-processamento humanizado
+    texte_tts = _preparar_texto_tts(texte)
+    if not texte_tts:
+        return
 
     is_speaking   = True
     speak_volume  = 0.0
@@ -521,11 +553,17 @@ async def parler(texte: str) -> None:
 
     ajouter_historique("model", texte, get_langue())
 
-    voix = get_voix()
-    tmp  = RONY_DIR / f"rony_tts_{int(time.time()*1000)}.mp3"
+    voix     = get_voix()
+    prosody  = get_prosody()
+    tmp      = RONY_DIR / f"rony_tts_{int(time.time()*1000)}.mp3"
 
     try:
-        communicate = edge_tts.Communicate(texte_tts, voice=voix)
+        communicate = edge_tts.Communicate(
+            texte_tts,
+            voice=voix,
+            rate=prosody.get("rate", "-5%"),
+            pitch=prosody.get("pitch", "+0Hz"),
+        )
         await communicate.save(str(tmp))
 
         if _skip_pc_audio and CONNECTED_CLIENTS:

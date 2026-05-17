@@ -11,23 +11,38 @@ from typing import Optional
 # ── Idioma activo (padrão: português Brasil) ──────────────────
 _langue_active = "pt"
 
-# ── Vozes TTS por idioma (edge-tts) ──────────────────────────
+# ── Vozes TTS por idioma (edge-tts — vozes mais expressivas/naturais) ────
+# Selecionadas por naturalidade e expressividade de cada idioma
 VOIX = {
-    "fr": "fr-FR-HenriNeural",
-    "pt": "pt-BR-AntonioNeural",
-    "en": "en-US-GuyNeural",
-    "es": "es-ES-AlvaroNeural",
-    "de": "de-DE-ConradNeural",
-    "it": "it-IT-DiegoNeural",
-    "nl": "nl-NL-MaartenNeural",
-    "pl": "pl-PL-MarekNeural",
-    "ru": "ru-RU-DmitryNeural",
-    "ja": "ja-JP-KeitaNeural",
-    "zh": "zh-CN-YunxiNeural",
-    "ar": "ar-SA-HamedNeural",
-    "tr": "tr-TR-AhmetNeural",
-    "ko": "ko-KR-InJoonNeural",
-    "sv": "sv-SE-MattiasNeural",
+    "fr": "fr-FR-DeniseNeural",           # Mais expressiva e natural (feminina)
+    "pt": "pt-BR-ThalitaMultilingualNeural",  # Mais humana do PT-BR (2024)
+    "en": "en-US-JennyNeural",            # Conversacional, calorosa
+    "es": "es-ES-ElviraNeural",           # Mais natural para ES
+    "de": "de-DE-KatjaNeural",            # Natural, expressiva
+    "it": "it-IT-ElsaNeural",             # Mais fluida para IT
+    "nl": "nl-NL-ColetteNeural",          # Natural para NL
+    "pl": "pl-PL-ZofiaNeural",            # Melhor para PL
+    "ru": "ru-RU-SvetlanaNeural",         # Mais expressiva para RU
+    "ja": "ja-JP-NanamiNeural",           # Natural para JA
+    "zh": "zh-CN-XiaoxiaoNeural",         # Líder em naturalidade para ZH
+    "ar": "ar-SA-ZariyahNeural",          # Melhor para AR
+    "tr": "tr-TR-EmelNeural",             # Natural para TR
+    "ko": "ko-KR-SunHiNeural",            # Mais expressiva para KO
+    "sv": "sv-SE-SofieNeural",            # Natural para SV
+}
+
+# ── Prosody por idioma (ritmo e pitch para soar mais humano) ─────────────
+VOIX_PROSODY = {
+    "pt": {"rate": "-8%",  "pitch": "+2Hz"},   # Um pouco mais devagar, tom caloroso
+    "fr": {"rate": "-5%",  "pitch": "+0Hz"},
+    "en": {"rate": "-5%",  "pitch": "+1Hz"},
+    "es": {"rate": "-5%",  "pitch": "+1Hz"},
+    "de": {"rate": "-8%",  "pitch": "-1Hz"},
+    "it": {"rate": "-5%",  "pitch": "+2Hz"},
+    "ja": {"rate": "-10%", "pitch": "+0Hz"},
+    "zh": {"rate": "-8%",  "pitch": "+0Hz"},
+    "ru": {"rate": "-8%",  "pitch": "-1Hz"},
+    "ko": {"rate": "-8%",  "pitch": "+1Hz"},
 }
 
 # ── Noms des langues ─────────────────────────────────────────
@@ -402,6 +417,11 @@ def get_langue() -> str:
 
 def get_voix() -> str:
     return VOIX.get(_langue_active, VOIX["fr"])
+
+
+def get_prosody() -> dict:
+    """Retorna rate e pitch para o idioma atual (para edge-tts mais humanizado)."""
+    return VOIX_PROSODY.get(_langue_active, {"rate": "-5%", "pitch": "+0Hz"})
 
 
 def get_label(cle: str) -> str:
