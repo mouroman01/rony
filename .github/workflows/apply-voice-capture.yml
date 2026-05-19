@@ -1,0 +1,277 @@
+name: Apply voice capture and TTS fixes
+
+on:
+  push:
+    paths:
+      - .github/workflows/apply-voice-capture.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-voice-capture:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply patch
+        shell: bash
+        run: |
+          git apply <<'PATCH'
+          diff --git a/main.py b/main.py
+          index 999fd57..a649e93 100644
+          --- a/main.py
+          +++ b/main.py
+          @@ -165,7 +165,9 @@ import rony_updater
+           GEMINI_KEY    = os.getenv("GEMINI_API_KEY", "")
+           OPENAI_KEY    = os.getenv("OPENAI_API_KEY", "")
+           OPENAI_REALTIME_MODEL = os.getenv("OPENAI_REALTIME_MODEL", "gpt-realtime")
+          -OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "alloy")
+          +OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "marin")
+          +OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+          +OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "marin")
+           GROQ_KEY      = os.getenv("GROQ_API_KEY", "")
+           ANTHROPIC_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+           GROK_KEY      = os.getenv("XAI_API_KEY", "")
+          @@ -196,6 +198,8 @@ _modo_ativo          = False   # False = veille, True = actif
+           _modo_realtime       = False   # True = escuta contínua sem wake word
+           _ts_ultimo_comando   = 0.0    # timestamp do último comando recebido
+           TIMEOUT_INATIVIDADE  = 45.0   # segundos sem comando → volta ao modo veille
+          +COMMAND_RMS_MIN      = int(os.getenv("RONY_COMMAND_RMS_MIN", "650"))
+          +WAKE_RMS_MIN         = int(os.getenv("RONY_WAKE_RMS_MIN", "900"))
+           
+           # ── Quotas API ────────────────────────────────────────────────
+           _quota_cooldown: dict[str, float] = {}
+          @@ -560,16 +564,16 @@ async def parler(texte: str) -> None:
+               # ── Mapa de voz OpenAI por idioma ────────────────────────────
+               # Vozes: alloy, echo, fable, onyx, nova, shimmer
+               _OPENAI_VOICE_MAP = {
+          -        "pt": "nova",     # Quente, natural — ótima para PT
+          -        "en": "nova",
+          -        "fr": "shimmer",
+          -        "es": "nova",
+          -        "de": "onyx",
+          -        "it": "shimmer",
+          -        "ja": "shimmer",
+          -        "zh": "shimmer",
+          -        "ru": "onyx",
+          -        "ko": "shimmer",
+          +        "pt": OPENAI_TTS_VOICE,
+          +        "en": OPENAI_TTS_VOICE,
+          +        "fr": OPENAI_TTS_VOICE,
+          +        "es": OPENAI_TTS_VOICE,
+          +        "de": "cedar",
+          +        "it": OPENAI_TTS_VOICE,
+          +        "ja": "cedar",
+          +        "zh": "cedar",
+          +        "ru": "cedar",
+          +        "ko": "cedar",
+               }
+           
+               async def _tocar_mp3(caminho: "Path") -> None:
+          @@ -603,11 +607,11 @@ async def parler(texte: str) -> None:
+               if openai_key and not openai_key.startswith("sk-VOTRE") and _client_openai:
+                   try:
+                       lingua_atual = get_langue()
+          -            openai_voice = _OPENAI_VOICE_MAP.get(lingua_atual, "nova")
+          +            openai_voice = _OPENAI_VOICE_MAP.get(lingua_atual, OPENAI_TTS_VOICE)
+                       resp = await asyncio.get_event_loop().run_in_executor(
+                           None,
+                           lambda: _client_openai.audio.speech.create(
+          -                    model="tts-1-hd",
+          +                    model=OPENAI_TTS_MODEL,
+                               voice=openai_voice,
+                               input=texte_tts,
+                               response_format="mp3",
+          @@ -752,6 +756,16 @@ def _transcrever_audio(audio: sr.AudioData, lang_code: str) -> str:
+               return recognizer.recognize_google(audio, language=lang_code)
+           
+           
+          +def _audio_rms(audio: sr.AudioData) -> int:
+          +    """Retorna o volume RMS do trecho capturado para filtrar ruido ambiente."""
+          +    try:
+          +        import audioop as _audioop
+          +        raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
+          +        return int(_audioop.rms(raw, 2))
+          +    except Exception:
+          +        return 9999
+          +
+          +
+           async def ecouter() -> str | None:
+               """Écoute le microphone et retourne le texte reconnu."""
+               global _micro_actif
+          @@ -762,18 +776,25 @@ async def ecouter() -> str | None:
+               mic_index = _charger_config_micro()
+           
+               recognizer = sr.Recognizer()
+          -    recognizer.energy_threshold        = 300
+          -    recognizer.dynamic_energy_threshold = True
+          -    recognizer.pause_threshold         = 0.8
+          +    recognizer.energy_threshold         = max(650, COMMAND_RMS_MIN)
+          +    recognizer.dynamic_energy_threshold = False
+          +    recognizer.pause_threshold          = 0.7
+          +    recognizer.non_speaking_duration    = 0.35
+           
+               try:
+                   mic_kwargs = {"device_index": mic_index} if mic_index is not None else {}
+                   with sr.Microphone(**mic_kwargs) as source:
+          -            recognizer.adjust_for_ambient_noise(source, duration=0.3)
+          +            recognizer.adjust_for_ambient_noise(source, duration=0.25)
+                       audio = await asyncio.get_event_loop().run_in_executor(
+          -                None, lambda: recognizer.listen(source, timeout=8, phrase_time_limit=15)
+          +                None, lambda: recognizer.listen(source, timeout=6, phrase_time_limit=10)
+                       )
+           
+          +        rms = _audio_rms(audio)
+          +        if rms < COMMAND_RMS_MIN:
+          +            print(f"[MICRO] Audio ignorado por volume baixo (rms={rms}).")
+          +            await send_web_state("idle")
+          +            return None
+          +
+                   langue = get_langue()
+                   lang_codes = {
+                       "fr": "fr-FR", "pt": "pt-BR", "en": "en-US", "es": "es-ES",
+          @@ -786,7 +807,11 @@ async def ecouter() -> str | None:
+                   texte = await asyncio.get_event_loop().run_in_executor(
+                       None, lambda: _transcrever_audio(audio, lang_code)
+                   )
+          -        print(f"[MICRO] Reconhecido ({langue}): {texte}")
+          +        if not texte or len(texte.strip()) < 2:
+          +            await send_web_state("idle")
+          +            return None
+          +
+          +        print(f"[MICRO] Reconhecido ({langue}, rms={rms}): {texte}")
+                   await send_web_state("thinking")
+                   return texte
+           
+          @@ -2321,7 +2346,7 @@ async def ecouter_wake_word() -> str | None:
+               mic_index = _charger_config_micro()
+               recognizer = sr.Recognizer()
+               # Threshold alto → só captura voz real, não ruído ambiente
+          -    recognizer.energy_threshold         = 1800
+          +    recognizer.energy_threshold         = max(1800, WAKE_RMS_MIN)
+               recognizer.dynamic_energy_threshold = False   # fixo para evitar adaptação a barulho
+               recognizer.pause_threshold          = 0.6
+               recognizer.non_speaking_duration    = 0.3
+          @@ -2329,21 +2354,16 @@ async def ecouter_wake_word() -> str | None:
+               try:
+                   mic_kwargs = {"device_index": mic_index} if mic_index is not None else {}
+                   with sr.Microphone(**mic_kwargs) as source:
+          -            recognizer.adjust_for_ambient_noise(source, duration=0.3)
+          +            recognizer.adjust_for_ambient_noise(source, duration=0.25)
+                       audio = await asyncio.get_event_loop().run_in_executor(
+                           None,
+          -                lambda: recognizer.listen(source, timeout=5, phrase_time_limit=5),
+          +                lambda: recognizer.listen(source, timeout=4, phrase_time_limit=4),
+                       )
+           
+                   # Verificação de energia antes de gastar API Groq
+          -        try:
+          -            import audioop as _audioop
+          -            raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
+          -            rms = _audioop.rms(raw, 2)
+          -            if rms < 600:          # muito fraco → ruído, descarta
+          -                return None
+          -        except Exception:
+          -            pass
+          +        rms = _audio_rms(audio)
+          +        if rms < WAKE_RMS_MIN:
+          +            return None
+           
+                   langue = get_langue()
+                   lang_codes = {
+          @@ -2356,6 +2376,8 @@ async def ecouter_wake_word() -> str | None:
+                       None,
+                       lambda: _transcrever_audio(audio, lang_code),
+                   )
+          +        if texte:
+          +            print(f"[VEILLE] Transcricao candidata (rms={rms}): {texte}")
+                   return texte
+               except (sr.WaitTimeoutError, sr.UnknownValueError):
+                   return None
+          @@ -2420,6 +2442,10 @@ async def boucle_ecoute() -> None:
+                   if len(t_veille) >= 2:
+                       print(f"[VEILLE] Entendu : '{texte}'")
+           
+          +                # Em espera, nada e executado sem a palavra de ativacao.
+          +                if not contient_wake_word(texte):
+          +                    continue
+          +
+                   # 1. Shutdown por voz mesmo em veille
+                   _SHUTDOWN_VEILLE = {
+                       "tchau", "ate logo", "ate mais", "encerrar", "fechar rony",
+          @@ -2507,12 +2533,12 @@ async def boucle_ecoute() -> None:
+           _TRIGGERS_REALTIME_ON = {
+               # sem espaço
+               "iniciar realtime", "modo realtime", "ativar realtime", "ativa realtime",
+          -    "ligar realtime", "realtime", "escuta contínua", "escuta continua",
+          +    "ligar realtime", "escuta contínua", "escuta continua",
+               "modo sempre ativo", "sempre ouvindo", "ouvir sempre",
+               "start realtime", "enable realtime",
+               # com espaço "real time"
+               "iniciar real time", "modo real time", "ativar real time",
+          -    "ligar real time", "real time", "ativa real time",
+          +    "ligar real time", "ativa real time",
+               "start real time", "enable real time",
+           }
+          diff --git a/wake_word.py b/wake_word.py
+          index 625c003..35dc326 100644
+          --- a/wake_word.py
+          +++ b/wake_word.py
+          @@ -5,6 +5,7 @@
+           # ============================================================
+           
+           import re
+          +import unicodedata
+           
+           # ── Mots de réveil acceptés (toutes langues) ─────────────────
+           WAKE_WORDS: set[str] = {
+          @@ -57,13 +58,12 @@ MOTS_ARRET_SIMPLES: set[str] = {
+           
+           def contient_wake_word(texte: str) -> bool:
+               """Retourne True si le texte contient un mot de réveil."""
+          -    t = texte.lower().strip()
+          -    # Vérification exacte
+          -    if t in WAKE_WORDS:
+          +    t = _normaliser(texte)
+          +    wake_words = {_normaliser(ww) for ww in WAKE_WORDS}
+          +    if t in wake_words:
+                   return True
+          -    # Vérification partielle (le mot est contenu dans la phrase)
+          -    for ww in WAKE_WORDS:
+          -        if ww in t:
+          +    for ww in sorted(wake_words, key=len, reverse=True):
+          +        if re.search(rf"(^|\b){re.escape(ww)}(\b|$)", t):
+                       return True
+               return False
+           
+          @@ -93,3 +93,10 @@ def nettoyer_commande(texte: str) -> str:
+                   pattern = re.compile(r"^" + re.escape(ww) + r"[\s,\.!?]*", re.IGNORECASE)
+                   t = pattern.sub("", t).strip()
+               return t if t else texte.strip()
+          +
+          +
+          +def _normaliser(texte: str) -> str:
+          +    texte = unicodedata.normalize("NFD", texte or "")
+          +    texte = "".join(ch for ch in texte if unicodedata.category(ch) != "Mn")
+          +    texte = re.sub(r"[^\w\s]", " ", texte.lower())
+          +    return " ".join(texte.split())
+          PATCH
+          py -3 -m py_compile main.py wake_word.py
+
+      - name: Commit source fix
+        shell: bash
+        run: |
+          if git diff --quiet -- main.py wake_word.py; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add main.py wake_word.py
+          git commit -m "fix: tighten voice capture and improve realtime voice"
+          git pull --rebase origin main
+          git push origin HEAD:main
