@@ -1,14 +1,14 @@
 {
-  "latest_version": "1.0.35",
-  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.35.exe",
-  "notes": "chore: sincroniza VERSION para 1.0.33 (evita auto-update loop)\nfix: cache mic index em memoria + sleep no loop wake word para evitar CPU 100%\nfix: import ctypes ausente + coroutine nao aguardada no rony_updater\nchore: clean update notes for v1.0.32\nchore: remove temporary augmented reality workflow\nchore: trigger release workflow for AR build",
+  "latest_version": "1.0.36",
+  "download_url": "https://github.com/mouroman01/rony/releases/download/latest/Rony_Setup_1.0.36.exe",
+  "notes": "chore: trigger release for startup fix\nfix: tolerate unicode minus in weather coordinates\nchore: add safe float patch workflow\nfeat: OpenAI TTS (tts-1-hd/nova) como voz principal + edge-tts como fallback [skip ci]\nfeat: voz mais humanizada - ThalitaMultilingualNeural + prosody rate/pitch por idioma [skip ci]\nfix: ImportError cliquer_coordonnees (nome francês) em vision_actions [skip ci]",
   "changes": [
-    "chore: sincroniza VERSION para 1.0.33 (evita auto-update loop)",
-    "fix: cache mic index em memoria + sleep no loop wake word para evitar CPU 100%",
-    "fix: import ctypes ausente + coroutine nao aguardada no rony_updater",
-    "chore: clean update notes for v1.0.32",
-    "chore: remove temporary augmented reality workflow",
-    "chore: trigger release workflow for AR build"
+    "chore: trigger release for startup fix",
+    "fix: tolerate unicode minus in weather coordinates",
+    "chore: add safe float patch workflow",
+    "feat: OpenAI TTS (tts-1-hd/nova) como voz principal + edge-tts como fallback [skip ci]",
+    "feat: voz mais humanizada - ThalitaMultilingualNeural + prosody rate/pitch por idioma [skip ci]",
+    "fix: ImportError cliquer_coordonnees (nome francês) em vision_actions [skip ci]"
   ],
   "mandatory": false
 }
