@@ -11,6 +11,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def _safe_float_env(value: str, default: float) -> float:
+    value = (value or "").strip()
+    if not value:
+        return default
+    value = (
+        value.replace("âˆ’", "-")
+        .replace("−", "-")
+        .replace("–", "-")
+        .replace("—", "-")
+        .replace(",", ".")
+    )
+    try:
+        return float(value)
+    except ValueError:
+        print(f"[RONY] Coordenada invalida no .env: {value!r}. Usando {default}.")
+        return default
+
 # ── Connexion Home Assistant ──────────────────────────────────
 HA_URL    = os.getenv("HA_URL", "")
 HA_TOKEN  = os.getenv("HA_TOKEN", "")
@@ -55,8 +72,8 @@ _LON_ENV   = os.getenv("LON_DEFAUT", "").strip()
 
 if _VILLE_ENV:
     VILLE_PAR_DEFAUT = _VILLE_ENV
-    LAT_PAR_DEFAUT   = float(_LAT_ENV)  if _LAT_ENV  else -23.5505
-    LON_PAR_DEFAUT   = float(_LON_ENV)  if _LON_ENV  else -46.6333
+    LAT_PAR_DEFAUT   = _safe_float_env(_LAT_ENV, -23.5505)
+    LON_PAR_DEFAUT   = _safe_float_env(_LON_ENV, -46.6333)
 else:
     VILLE_PAR_DEFAUT, LAT_PAR_DEFAUT, LON_PAR_DEFAUT = _autodetectar_localizacao()
     print(f"[RONY] 📍 Localização auto-detectada: {VILLE_PAR_DEFAUT} ({LAT_PAR_DEFAUT:.4f}, {LON_PAR_DEFAUT:.4f})")
