@@ -1,6 +1,7 @@
 name: Build and publish Rony updater
 
 # Touch this workflow when a GitHub Actions-authored source commit needs a release build.
+# Last manual trigger: startup coordinate parsing fix.
 on:
   push:
     branches:
