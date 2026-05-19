@@ -18,55 +18,46 @@ jobs:
           fetch-depth: 0
 
       - name: Patch source
-        shell: pwsh
+        shell: python
         run: |
-          @'
           from pathlib import Path
           import re
 
           main = Path("main.py")
           text = main.read_text(encoding="utf-8")
-
           text = text.replace('OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "alloy")', 'OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "marin")')
           if 'OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL"' not in text:
-              text = text.replace(
-                  'OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "marin")',
-                  'OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "marin")\nOPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")\nOPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "marin")',
-              )
-
+              text = text.replace('OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "marin")', 'OPENAI_REALTIME_VOICE = os.getenv("OPENAI_REALTIME_VOICE", "marin")\nOPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")\nOPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "marin")')
           if 'COMMAND_RMS_MIN' not in text:
-              text = text.replace(
-                  'TIMEOUT_INATIVIDADE  = 45.0   # segundos sem comando → volta ao modo veille',
-                  'TIMEOUT_INATIVIDADE  = 45.0   # segundos sem comando → volta ao modo veille\nCOMMAND_RMS_MIN      = int(os.getenv("RONY_COMMAND_RMS_MIN", "650"))\nWAKE_RMS_MIN         = int(os.getenv("RONY_WAKE_RMS_MIN", "900"))',
-              )
+              text = text.replace('TIMEOUT_INATIVIDADE  = 45.0   # segundos sem comando → volta ao modo veille', 'TIMEOUT_INATIVIDADE  = 45.0   # segundos sem comando → volta ao modo veille\nCOMMAND_RMS_MIN      = int(os.getenv("RONY_COMMAND_RMS_MIN", "650"))\nWAKE_RMS_MIN         = int(os.getenv("RONY_WAKE_RMS_MIN", "900"))')
 
           voice_map = '''_OPENAI_VOICE_MAP = {
-        "pt": OPENAI_TTS_VOICE,
-        "en": OPENAI_TTS_VOICE,
-        "fr": OPENAI_TTS_VOICE,
-        "es": OPENAI_TTS_VOICE,
-        "de": "cedar",
-        "it": OPENAI_TTS_VOICE,
-        "ja": "cedar",
-        "zh": "cedar",
-        "ru": "cedar",
-        "ko": "cedar",
-    }'''
+                  "pt": OPENAI_TTS_VOICE,
+                  "en": OPENAI_TTS_VOICE,
+                  "fr": OPENAI_TTS_VOICE,
+                  "es": OPENAI_TTS_VOICE,
+                  "de": "cedar",
+                  "it": OPENAI_TTS_VOICE,
+                  "ja": "cedar",
+                  "zh": "cedar",
+                  "ru": "cedar",
+                  "ko": "cedar",
+              }'''.replace('              ', '    ')
           text = re.sub(r'_OPENAI_VOICE_MAP = \{\n(?:        .+\n)+?    \}', voice_map, text, count=1)
           text = text.replace('_OPENAI_VOICE_MAP.get(lingua_atual, "nova")', '_OPENAI_VOICE_MAP.get(lingua_atual, OPENAI_TTS_VOICE)')
           text = text.replace('model="tts-1-hd"', 'model=OPENAI_TTS_MODEL')
 
           helper = '''def _audio_rms(audio: sr.AudioData) -> int:
-    """Retorna o volume RMS do trecho capturado para filtrar ruido ambiente."""
-    try:
-        import audioop as _audioop
-        raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
-        return int(_audioop.rms(raw, 2))
-    except Exception:
-        return 9999
+              """Retorna o volume RMS do trecho capturado para filtrar ruido ambiente."""
+              try:
+                  import audioop as _audioop
+                  raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
+                  return int(_audioop.rms(raw, 2))
+              except Exception:
+                  return 9999
 
 
-'''
+          '''.replace('          ', '')
           if 'def _audio_rms(' not in text:
               text = text.replace('    recognizer = sr.Recognizer()\n    return recognizer.recognize_google(audio, language=lang_code)\n\n\nasync def ecouter()', '    recognizer = sr.Recognizer()\n    return recognizer.recognize_google(audio, language=lang_code)\n\n\n' + helper + 'async def ecouter()')
 
@@ -85,54 +76,49 @@ jobs:
               text = text.replace(old, new)
 
           if '[MICRO] Audio ignorado por volume baixo' not in text:
-              text = text.replace(
-                  '        langue = get_langue()\n        lang_codes = {\n            "fr": "fr-FR", "pt": "pt-BR", "en": "en-US", "es": "es-ES",',
-                  '        rms = _audio_rms(audio)\n        if rms < COMMAND_RMS_MIN:\n            print(f"[MICRO] Audio ignorado por volume baixo (rms={rms}).")\n            await send_web_state("idle")\n            return None\n\n        langue = get_langue()\n        lang_codes = {\n            "fr": "fr-FR", "pt": "pt-BR", "en": "en-US", "es": "es-ES",',
-                  1,
-              )
+              text = text.replace('        langue = get_langue()\n        lang_codes = {\n            "fr": "fr-FR", "pt": "pt-BR", "en": "en-US", "es": "es-ES",', '        rms = _audio_rms(audio)\n        if rms < COMMAND_RMS_MIN:\n            print(f"[MICRO] Audio ignorado por volume baixo (rms={rms}).")\n            await send_web_state("idle")\n            return None\n\n        langue = get_langue()\n        lang_codes = {\n            "fr": "fr-FR", "pt": "pt-BR", "en": "en-US", "es": "es-ES",', 1)
           text = text.replace('print(f"[MICRO] Reconhecido ({langue}): {texte}")', 'if not texte or len(texte.strip()) < 2:\n            await send_web_state("idle")\n            return None\n\n        print(f"[MICRO] Reconhecido ({langue}, rms={rms}): {texte}")')
 
           old_wake_rms = '''        # Verificação de energia antes de gastar API Groq
-        try:
-            import audioop as _audioop
-            raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
-            rms = _audioop.rms(raw, 2)
-            if rms < 600:          # muito fraco → ruído, descarta
-                return None
-        except Exception:
-            pass
-'''
+                  try:
+                      import audioop as _audioop
+                      raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
+                      rms = _audioop.rms(raw, 2)
+                      if rms < 600:          # muito fraco → ruído, descarta
+                          return None
+                  except Exception:
+                      pass
+          '''.replace('          ', '')
           new_wake_rms = '''        # Verificação de energia antes de gastar API Groq
-        rms = _audio_rms(audio)
-        if rms < WAKE_RMS_MIN:
-            return None
-'''
+                  rms = _audio_rms(audio)
+                  if rms < WAKE_RMS_MIN:
+                      return None
+          '''.replace('          ', '')
           text = text.replace(old_wake_rms, new_wake_rms)
           if '[VEILLE] Transcricao candidata' not in text:
               text = text.replace('''        texte = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: _transcrever_audio(audio, lang_code),
-        )
-        return texte''', '''        texte = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: _transcrever_audio(audio, lang_code),
-        )
-        if texte:
-            print(f"[VEILLE] Transcricao candidata (rms={rms}): {texte}")
-        return texte''')
+                  None,
+                  lambda: _transcrever_audio(audio, lang_code),
+              )
+              return texte'''.replace('              ', '        '), '''        texte = await asyncio.get_event_loop().run_in_executor(
+                  None,
+                  lambda: _transcrever_audio(audio, lang_code),
+              )
+              if texte:
+                  print(f"[VEILLE] Transcricao candidata (rms={rms}): {texte}")
+              return texte'''.replace('              ', '        '))
           if 'Em espera, nada e executado sem a palavra de ativacao.' not in text:
               text = text.replace('''                if len(t_veille) >= 2:
-                    print(f"[VEILLE] Entendu : '{texte}'")
+                      print(f"[VEILLE] Entendu : '{texte}'")
 
-                # 1. Shutdown por voz mesmo em veille''', '''                if len(t_veille) >= 2:
-                    print(f"[VEILLE] Entendu : '{texte}'")
+                  # 1. Shutdown por voz mesmo em veille'''.replace('                  ', '                '), '''                if len(t_veille) >= 2:
+                      print(f"[VEILLE] Entendu : '{texte}'")
 
-                # Em espera, nada e executado sem a palavra de ativacao.
-                if not contient_wake_word(texte):
-                    continue
+                  # Em espera, nada e executado sem a palavra de ativacao.
+                  if not contient_wake_word(texte):
+                      continue
 
-                # 1. Shutdown por voz mesmo em veille''')
-
+                  # 1. Shutdown por voz mesmo em veille'''.replace('                  ', '                '))
           main.write_text(text, encoding="utf-8", newline="\n")
 
           wake = Path("wake_word.py")
@@ -140,15 +126,15 @@ jobs:
           if 'import unicodedata' not in w:
               w = w.replace('import re\n', 'import re\nimport unicodedata\n')
           w = re.sub(r'def contient_wake_word\(texte: str\) -> bool:\n    """.*?"""\n    t = texte\.lower\(\)\.strip\(\)\n    # Vérification exacte\n    if t in WAKE_WORDS:\n        return True\n    # Vérification partielle \(le mot est contenu dans la phrase\)\n    for ww in WAKE_WORDS:\n        if ww in t:\n            return True\n    return False', '''def contient_wake_word(texte: str) -> bool:
-    """Retourne True si le texte contient un mot de réveil."""
-    t = _normaliser(texte)
-    wake_words = {_normaliser(ww) for ww in WAKE_WORDS}
-    if t in wake_words:
-        return True
-    for ww in sorted(wake_words, key=len, reverse=True):
-        if re.search(rf"(^|\\b){re.escape(ww)}(\\b|$)", t):
-            return True
-    return False''', w, flags=re.S)
+              """Retourne True si le texte contient un mot de réveil."""
+              t = _normaliser(texte)
+              wake_words = {_normaliser(ww) for ww in WAKE_WORDS}
+              if t in wake_words:
+                  return True
+              for ww in sorted(wake_words, key=len, reverse=True):
+                  if re.search(rf"(^|\\b){re.escape(ww)}(\\b|$)", t):
+                      return True
+              return False'''.replace('              ', '    '), w, flags=re.S)
           if 'def _normaliser(' not in w:
               w += '''
 
@@ -160,9 +146,10 @@ def _normaliser(texte: str) -> str:
     return " ".join(texte.split())
 '''
           wake.write_text(w, encoding="utf-8", newline="\n")
-          '@ | ForEach-Object { $_ -replace '^          ', '' } | Set-Content -LiteralPath patch_voice.py -Encoding UTF8
-          py -3 patch_voice.py
-          py -3 -m py_compile main.py wake_word.py
+
+      - name: Validate
+        shell: pwsh
+        run: py -3 -m py_compile main.py wake_word.py
 
       - name: Commit source fix
         shell: bash
